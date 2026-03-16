@@ -67,21 +67,32 @@ Watch the algorithm come alive. The TUI demo trains a model in real time and vis
 cargo run --example demo_tui --release
 ```
 
-<p align="center">
-  <img src="docs/assets/img/attnres-tui-demo-1.png" width="700" alt="TUI demo at initialization — uniform depth attention weights, all pseudo-query norms at zero">
-</p>
-
-<p align="center">
-  <em>Step 0: All pseudo-queries are zero-initialized. Every block receives equal attention weight (1/N).</em>
-</p>
-
-<p align="center">
-  <img src="docs/assets/img/attnres-tui-demo-2.png" width="700" alt="TUI demo mid-training — loss decreasing, attention patterns becoming selective, pseudo-query norms growing">
-</p>
-
-<p align="center">
-  <em>Mid-training: Deeper layers develop stronger preferences. Pseudo-query norms grow as the model learns which blocks are most useful at each depth.</em>
-</p>
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/assets/img/attnres-tui-demo-1.png" width="100%" alt="Overview view of the redesigned AttnRes TUI showing live telemetry, routing heatmap, and event feed">
+      <br />
+      <sub><strong>1. Overview</strong> — live training telemetry, block topology, routing heatmap, and event feed.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/assets/img/attnres-tui-demo-2.png" width="100%" alt="Pipeline view of the redesigned AttnRes TUI showing selected sublayer drilldown and algorithm steps">
+      <br />
+      <sub><strong>2. Pipeline</strong> — selected sublayer drilldown, pre-softmax scores, routing mass, and the 5-step AttnRes trace.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" align="center">
+      <img src="docs/assets/img/attnres-tui-demo-3.png" width="100%" alt="Inference view of the redesigned AttnRes TUI showing two-phase schedule and merge observability">
+      <br />
+      <sub><strong>3. Inference</strong> — two-phase scheduling, cache-vs-partial merge behavior, and parity checks.</sub>
+    </td>
+    <td width="50%" align="center">
+      <img src="docs/assets/img/attnres-tui-demo-4.png" width="100%" alt="Compact view of the redesigned AttnRes TUI in a smaller terminal layout">
+      <br />
+      <sub><strong>4. Compact Mode</strong> — condensed terminal layout that keeps the core observability usable in smaller shells.</sub>
+    </td>
+  </tr>
+</table>
 
 **Controls:** `Space` start/pause | `Up/Down` speed | `Left/Right` inspect sublayers | `Tab` or `1/2/3` switch views | `?` help | `r` reset | `q` quit
 
