@@ -83,13 +83,13 @@ cargo run --example demo_tui --release
   <em>Mid-training: Deeper layers develop stronger preferences. Pseudo-query norms grow as the model learns which blocks are most useful at each depth.</em>
 </p>
 
-**Controls:** `Space` start/pause | `Up/Down` speed | `r` reset | `q` quit
+**Controls:** `Space` start/pause | `Up/Down` speed | `Left/Right` inspect sublayers | `Tab` or `1/2/3` switch views | `?` help | `r` reset | `q` quit
 
 **What you're seeing:**
-- **Loss Curve** — Cross-entropy loss decreasing as the model learns
-- **Depth Attention Weights** — Actual softmax attention weights computed from the model's pseudo-query vectors and block states. Rows are transformer layers, columns are source blocks (Emb, B1, ..., Partial)
-- **Pseudo-Query Norms** — The magnitude of each layer's learned w_l vector. Zero means uniform; larger means more selective
-- **Algorithm** — The 5-step AttnRes computation, cycling to build intuition
+- **Overview** — Live training telemetry, loss stream, block topology, routing heatmap, and event feed
+- **Pipeline** — Selected sublayer drilldown with pre-softmax logits, routing mass, and a narrated 5-step AttnRes trace
+- **Inference** — Two-phase scheduling, cache vs partial merge behavior, and parity checks against standard forward
+- **Depth Routing Heatmap** — Actual softmax attention weights computed from the model's pseudo-query vectors and block states. Rows are sublayers, columns are source blocks (`Emb`, `B1`, ..., `Part`)
 
 ## Architecture
 
