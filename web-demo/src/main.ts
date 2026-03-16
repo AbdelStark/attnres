@@ -16,14 +16,109 @@ let trainingInterval: ReturnType<typeof setInterval> | null = null;
 let lossHistory: number[] = [];
 let normsHistory: number[][] = [];
 
+// ─── Toast Notifications ───────────────────────────────────────────────
+
+function showToast(message: string, type: "info" | "error" | "success" = "info", duration = 4000) {
+  const container = document.getElementById("toast-container")!;
+  const toast = document.createElement("div");
+  toast.className = `toast${type !== "info" ? ` toast-${type}` : ""}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  const dismiss = () => {
+    toast.classList.add("toast-exit");
+    toast.addEventListener("animationend", () => toast.remove(), { once: true });
+  };
+
+  toast.addEventListener("click", dismiss);
+  setTimeout(dismiss, duration);
+}
+
+// ─── Navigation ────────────────────────────────────────────────────────
+
+function setupNavigation() {
+  const nav = document.querySelector(".nav")!;
+  const toggle = document.querySelector(".nav-toggle") as HTMLButtonElement;
+  const links = document.getElementById("nav-links")!;
+  const navAnchors = links.querySelectorAll("a[href^='#']");
+
+  // Scrolled state — add subtle shadow
+  const updateScrollState = () => {
+    nav.classList.toggle("scrolled", window.scrollY > 10);
+  };
+  window.addEventListener("scroll", updateScrollState, { passive: true });
+  updateScrollState();
+
+  // Mobile toggle
+  toggle.addEventListener("click", () => {
+    const open = links.classList.toggle("open");
+    toggle.setAttribute("aria-expanded", String(open));
+  });
+
+  // Close mobile nav on link click
+  navAnchors.forEach((a) =>
+    a.addEventListener("click", () => {
+      links.classList.remove("open");
+      toggle.setAttribute("aria-expanded", "false");
+    })
+  );
+
+  // Active nav link via IntersectionObserver
+  const sections = document.querySelectorAll<HTMLElement>("section[id]");
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          navAnchors.forEach((a) => {
+            a.classList.toggle("active", a.getAttribute("href") === `#${id}`);
+          });
+        }
+      }
+    },
+    { rootMargin: "-40% 0px -55% 0px" }
+  );
+
+  sections.forEach((s) => observer.observe(s));
+}
+
+// ─── Section Fade-In ───────────────────────────────────────────────────
+
+function setupFadeIn() {
+  const containers = document.querySelectorAll<HTMLElement>(".section .container");
+
+  // Immediately show hero container
+  const heroContainer = document.querySelector<HTMLElement>(".hero .container");
+  if (heroContainer) heroContainer.classList.add("visible");
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          (entry.target as HTMLElement).classList.add("visible");
+          observer.unobserve(entry.target);
+        }
+      }
+    },
+    { threshold: 0.1 }
+  );
+
+  containers.forEach((c) => observer.observe(c));
+}
+
 // ─── Initialization ────────────────────────────────────────────────────
 
 async function main() {
   const statusEl = document.getElementById("wasm-status")!;
 
+  // Start non-WASM setup immediately
+  setupNavigation();
+  setupFadeIn();
+
   try {
     await init();
-    statusEl.innerHTML = `<span class="status-dot"></span><span>WASM engine ready</span>`;
+    statusEl.innerHTML = `<span class="status-dot" aria-hidden="true"></span><span>WASM engine ready</span>`;
+    showToast("WASM engine loaded successfully", "success", 2500);
 
     // Draw static diagrams
     drawStandardResidual("canvas-standard");
@@ -34,7 +129,8 @@ async function main() {
     setupDemoControls();
     setupTrainingControls();
   } catch (e) {
-    statusEl.innerHTML = `<span class="status-dot" style="background:#ef4444"></span><span>Failed to load WASM: ${e}</span>`;
+    statusEl.innerHTML = `<span class="status-dot error" aria-hidden="true"></span><span>Failed to load WASM engine</span>`;
+    showToast(`WASM load error: ${e}`, "error", 8000);
     console.error(e);
   }
 }
@@ -54,11 +150,11 @@ function setupDemoControls() {
 
     // Validate blocks divides layers
     if (numLayers % numBlocks !== 0) {
-      alert(`num_layers (${numLayers}) must be divisible by num_blocks (${numBlocks})`);
+      showToast(`num_layers (${numLayers}) must be divisible by num_blocks (${numBlocks}). Try layers=8, blocks=2.`, "error");
       return;
     }
     if (dModel % numHeads !== 0) {
-      alert(`d_model (${dModel}) must be divisible by num_heads (${numHeads})`);
+      showToast(`d_model (${dModel}) must be divisible by num_heads (${numHeads}). Try d_model=32, heads=4.`, "error");
       return;
     }
 
@@ -78,17 +174,23 @@ function setupDemoControls() {
 
       slider.value = "0";
       magDisplay.textContent = "0.00";
+      slider.setAttribute("aria-valuenow", "0");
+      slider.setAttribute("aria-valuetext", "0.00 (uniform)");
 
       updateDemo();
       showModelInfo();
+      showToast(`Model initialized: ${numLayers} sublayers, ${numBlocks} blocks`, "success", 2500);
     } catch (e) {
-      alert(`Failed to create model: ${e}`);
+      showToast(`Failed to create model: ${e}`, "error");
     }
   });
 
   slider.addEventListener("input", () => {
     const mag = parseInt(slider.value) / 100;
     magDisplay.textContent = mag.toFixed(2);
+    slider.setAttribute("aria-valuenow", mag.toFixed(2));
+    const label = mag === 0 ? "0.00 (uniform)" : mag >= 0.95 ? `${mag.toFixed(2)} (selective)` : mag.toFixed(2);
+    slider.setAttribute("aria-valuetext", label);
     updateDemo();
   });
 }
@@ -155,6 +257,20 @@ function updateDemo() {
 
 // ─── Training Panel ────────────────────────────────────────────────────
 
+function showTrainingCanvas(id: string, emptyId: string) {
+  const canvas = document.getElementById(id) as HTMLCanvasElement;
+  const empty = document.getElementById(emptyId);
+  if (canvas) canvas.style.display = "block";
+  if (empty) empty.style.display = "none";
+}
+
+function hideTrainingCanvas(id: string, emptyId: string) {
+  const canvas = document.getElementById(id) as HTMLCanvasElement;
+  const empty = document.getElementById(emptyId);
+  if (canvas) canvas.style.display = "none";
+  if (empty) empty.style.display = "flex";
+}
+
 function setupTrainingControls() {
   const btnStart = document.getElementById("btn-train-start") as HTMLButtonElement;
   const btnReset = document.getElementById("btn-train-reset") as HTMLButtonElement;
@@ -165,6 +281,7 @@ function setupTrainingControls() {
       clearInterval(trainingInterval);
       trainingInterval = null;
       btnStart.textContent = "Resume Training";
+      btnStart.setAttribute("aria-label", "Resume training simulation");
       return;
     }
 
@@ -174,6 +291,12 @@ function setupTrainingControls() {
     }
 
     btnStart.textContent = "Pause";
+    btnStart.setAttribute("aria-label", "Pause training simulation");
+
+    // Show canvases, hide empty states
+    showTrainingCanvas("canvas-loss", "loss-empty");
+    showTrainingCanvas("canvas-train-heatmap", "heatmap-empty");
+    showTrainingCanvas("canvas-norms", "norms-empty");
 
     trainingInterval = setInterval(() => {
       if (!engine) return;
@@ -210,6 +333,12 @@ function setupTrainingControls() {
     document.getElementById("train-step")!.textContent = "0";
     document.getElementById("train-loss")!.textContent = "\u2014";
     btnStart.textContent = "Start Training";
+    btnStart.setAttribute("aria-label", "Start training simulation");
+
+    // Show empty states, hide canvases
+    hideTrainingCanvas("canvas-loss", "loss-empty");
+    hideTrainingCanvas("canvas-train-heatmap", "heatmap-empty");
+    hideTrainingCanvas("canvas-norms", "norms-empty");
 
     // Clear canvases
     clearCanvas("canvas-loss");

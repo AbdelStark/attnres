@@ -3,7 +3,28 @@
  *
  * All drawing is done with the Canvas 2D API for universal compatibility.
  * Heatmaps use a perceptually uniform blue gradient.
+ * Dark mode is auto-detected via prefers-color-scheme.
  */
+
+// ─── Theme Detection ──────────────────────────────────────────────────
+
+function isDarkMode(): boolean {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function themeColors() {
+  const dark = isDarkMode();
+  return {
+    text: dark ? "#ededef" : "#333",
+    textMuted: dark ? "#6e6e76" : "#888",
+    grid: dark ? "#2e2e32" : "#eee",
+    axis: dark ? "#3a3a40" : "#ccc",
+    surface: dark ? "#18181b" : "#fff",
+    barStroke: dark ? "rgba(96, 165, 250, 0.2)" : "#2563eb33",
+    curveColor: dark ? "#60a5fa" : "#2563eb",
+    curveFill: dark ? "rgba(96, 165, 250, 0.08)" : "rgba(37, 99, 235, 0.05)",
+  };
+}
 
 // ─── Color Utilities ───────────────────────────────────────────────────
 
@@ -11,6 +32,13 @@
 function heatColor(t: number): string {
   // Perceptually uniform: white → light blue → deep blue
   t = Math.max(0, Math.min(1, t));
+  if (isDarkMode()) {
+    // Dark mode: dark navy → bright blue → light blue
+    const r = Math.round(26 + t * 121);  // 26 → 147
+    const g = Math.round(29 + t * 168);  // 29 → 197
+    const b = Math.round(46 + t * 207);  // 46 → 253
+    return `rgb(${r}, ${g}, ${b})`;
+  }
   const r = Math.round(240 - t * 210);
   const g = Math.round(244 - t * 186);
   const b = Math.round(255 - t * 160);
@@ -45,6 +73,28 @@ function getCtx(canvasId: string): {
   return { ctx, w, h, canvas };
 }
 
+// ─── Rounded Rect Helper ──────────────────────────────────────────────
+
+function fillRoundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number, y: number, w: number, h: number, r: number
+) {
+  r = Math.min(r, w / 2, h / 2);
+  if (r <= 0) { ctx.fillRect(x, y, w, h); return; }
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  ctx.fill();
+}
+
 // ─── Heatmap ───────────────────────────────────────────────────────────
 
 /**
@@ -57,6 +107,7 @@ function getCtx(canvasId: string): {
  */
 export function drawHeatmap(canvasId: string, weights: number[][]): void {
   const { ctx, w, h } = getCtx(canvasId);
+  const theme = themeColors();
 
   if (weights.length === 0) return;
 
@@ -67,6 +118,7 @@ export function drawHeatmap(canvasId: string, weights: number[][]): void {
   const labelH = 40;
   const padR = 60; // space for color scale
   const padB = 10;
+  const cellGap = 1.5;
 
   const cellW = (w - labelW - padR) / numCols;
   const cellH = (h - labelH - padB) / numRows;
@@ -81,11 +133,21 @@ export function drawHeatmap(canvasId: string, weights: number[][]): void {
       const norm = val / maxVal;
 
       ctx.fillStyle = heatColor(norm);
-      ctx.fillRect(labelW + c * cellW, labelH + r * cellH, cellW - 1, cellH - 1);
+      fillRoundedRect(
+        ctx,
+        labelW + c * cellW + cellGap / 2,
+        labelH + r * cellH + cellGap / 2,
+        cellW - cellGap,
+        cellH - cellGap,
+        2
+      );
 
       // Value text
       if (cellW > 30 && cellH > 14) {
-        ctx.fillStyle = norm > 0.6 ? "#fff" : "#333";
+        const dark = isDarkMode();
+        ctx.fillStyle = dark
+          ? (norm > 0.6 ? "#1a1a1a" : "#ddd")
+          : (norm > 0.6 ? "#fff" : "#333");
         ctx.font = `500 ${Math.min(11, cellH * 0.5)}px "JetBrains Mono", monospace`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -99,7 +161,7 @@ export function drawHeatmap(canvasId: string, weights: number[][]): void {
   }
 
   // Row labels (sublayer names)
-  ctx.fillStyle = "#888";
+  ctx.fillStyle = theme.textMuted;
   ctx.font = '500 10px "JetBrains Mono", monospace';
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
@@ -123,16 +185,17 @@ export function drawHeatmap(canvasId: string, weights: number[][]): void {
 
   // Color scale legend
   const scaleX = w - padR + 12;
-  const scaleW = 14;
+  const scaleW = 12;
   const scaleH = h - labelH - padB;
 
+  // Draw scale with rounded ends
   for (let y = 0; y < scaleH; y++) {
     const t = 1 - y / scaleH;
     ctx.fillStyle = heatColor(t);
     ctx.fillRect(scaleX, labelH + y, scaleW, 1);
   }
 
-  ctx.fillStyle = "#888";
+  ctx.fillStyle = theme.textMuted;
   ctx.font = '400 9px "JetBrains Mono", monospace';
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
@@ -148,18 +211,19 @@ export function drawHeatmap(canvasId: string, weights: number[][]): void {
  */
 export function drawBarChart(canvasId: string, weights: number[]): void {
   const { ctx, w, h } = getCtx(canvasId);
+  const theme = themeColors();
 
   if (weights.length === 0) return;
 
   const padL = 40;
   const padR = 20;
-  const padT = 20;
+  const padT = 24;
   const padB = 40;
 
   const chartW = w - padL - padR;
   const chartH = h - padT - padB;
   const barW = chartW / weights.length;
-  const gap = Math.max(2, barW * 0.15);
+  const gap = Math.max(4, barW * 0.2);
 
   const maxVal = Math.max(...weights, 0.001);
 
@@ -170,29 +234,31 @@ export function drawBarChart(canvasId: string, weights: number[]): void {
     const y = padT + chartH - barH;
 
     ctx.fillStyle = heatColor(weights[i] / maxVal);
-    ctx.fillRect(x, y, barW - gap, barH);
+    fillRoundedRect(ctx, x, y, barW - gap, barH, 3);
 
-    // Border
-    ctx.strokeStyle = "#2563eb33";
+    // Subtle stroke
+    ctx.strokeStyle = theme.barStroke;
     ctx.lineWidth = 1;
-    ctx.strokeRect(x, y, barW - gap, barH);
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW - gap, barH, 3);
+    ctx.stroke();
 
     // Value label
-    ctx.fillStyle = "#333";
+    ctx.fillStyle = theme.text;
     ctx.font = '500 10px "JetBrains Mono", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "bottom";
-    ctx.fillText(weights[i].toFixed(3), x + (barW - gap) / 2, y - 3);
+    ctx.fillText(weights[i].toFixed(3), x + (barW - gap) / 2, y - 4);
 
     // X label
-    ctx.fillStyle = "#888";
+    ctx.fillStyle = theme.textMuted;
     ctx.textBaseline = "top";
     const label = i === 0 ? "Emb" : i === weights.length - 1 ? "Part" : `B${i}`;
-    ctx.fillText(label, x + (barW - gap) / 2, padT + chartH + 6);
+    ctx.fillText(label, x + (barW - gap) / 2, padT + chartH + 8);
   }
 
   // Y axis
-  ctx.strokeStyle = "#ddd";
+  ctx.strokeStyle = theme.axis;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(padL, padT);
@@ -200,8 +266,8 @@ export function drawBarChart(canvasId: string, weights: number[]): void {
   ctx.lineTo(padL + chartW, padT + chartH);
   ctx.stroke();
 
-  // Y axis label
-  ctx.fillStyle = "#888";
+  // Y axis labels
+  ctx.fillStyle = theme.textMuted;
   ctx.font = '400 10px "JetBrains Mono", monospace';
   ctx.textAlign = "right";
   ctx.textBaseline = "top";
@@ -217,6 +283,7 @@ export function drawBarChart(canvasId: string, weights: number[]): void {
  */
 export function drawLossCurve(canvasId: string, losses: number[]): void {
   const { ctx, w, h } = getCtx(canvasId);
+  const theme = themeColors();
 
   if (losses.length < 2) return;
 
@@ -233,7 +300,7 @@ export function drawLossCurve(canvasId: string, losses: number[]): void {
   const range = maxLoss - minLoss || 1;
 
   // Grid lines
-  ctx.strokeStyle = "#eee";
+  ctx.strokeStyle = theme.grid;
   ctx.lineWidth = 1;
   for (let i = 0; i <= 4; i++) {
     const y = padT + (chartH * i) / 4;
@@ -244,9 +311,10 @@ export function drawLossCurve(canvasId: string, losses: number[]): void {
   }
 
   // Loss curve
-  ctx.strokeStyle = "#2563eb";
+  ctx.strokeStyle = theme.curveColor;
   ctx.lineWidth = 2;
   ctx.lineJoin = "round";
+  ctx.lineCap = "round";
   ctx.beginPath();
 
   for (let i = 0; i < losses.length; i++) {
@@ -261,11 +329,11 @@ export function drawLossCurve(canvasId: string, losses: number[]): void {
   ctx.lineTo(padL + chartW, padT + chartH);
   ctx.lineTo(padL, padT + chartH);
   ctx.closePath();
-  ctx.fillStyle = "rgba(37, 99, 235, 0.05)";
+  ctx.fillStyle = theme.curveFill;
   ctx.fill();
 
   // Axes
-  ctx.strokeStyle = "#ccc";
+  ctx.strokeStyle = theme.axis;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(padL, padT);
@@ -274,7 +342,7 @@ export function drawLossCurve(canvasId: string, losses: number[]): void {
   ctx.stroke();
 
   // Labels
-  ctx.fillStyle = "#888";
+  ctx.fillStyle = theme.textMuted;
   ctx.font = '400 10px "JetBrains Mono", monospace';
   ctx.textAlign = "right";
   ctx.textBaseline = "top";
@@ -297,6 +365,7 @@ export function drawLossCurve(canvasId: string, losses: number[]): void {
  */
 export function drawNormsChart(canvasId: string, history: number[][]): void {
   const { ctx, w, h } = getCtx(canvasId);
+  const theme = themeColors();
 
   if (history.length < 2) return;
 
@@ -313,7 +382,7 @@ export function drawNormsChart(canvasId: string, history: number[][]): void {
   const maxVal = Math.max(...allVals, 0.001) * 1.05;
 
   // Grid
-  ctx.strokeStyle = "#eee";
+  ctx.strokeStyle = theme.grid;
   ctx.lineWidth = 1;
   for (let i = 0; i <= 4; i++) {
     const y = padT + (chartH * i) / 4;
@@ -329,7 +398,9 @@ export function drawNormsChart(canvasId: string, history: number[][]): void {
   for (let s = 0; s < numSeries; s++) {
     ctx.strokeStyle = colors[s];
     ctx.lineWidth = 1.5;
-    ctx.globalAlpha = 0.7;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.globalAlpha = 0.75;
     ctx.beginPath();
 
     for (let t = 0; t < history.length; t++) {
@@ -344,7 +415,7 @@ export function drawNormsChart(canvasId: string, history: number[][]): void {
   ctx.globalAlpha = 1.0;
 
   // Axes
-  ctx.strokeStyle = "#ccc";
+  ctx.strokeStyle = theme.axis;
   ctx.lineWidth = 1;
   ctx.beginPath();
   ctx.moveTo(padL, padT);
@@ -353,7 +424,7 @@ export function drawNormsChart(canvasId: string, history: number[][]): void {
   ctx.stroke();
 
   // Labels
-  ctx.fillStyle = "#888";
+  ctx.fillStyle = theme.textMuted;
   ctx.font = '400 10px "JetBrains Mono", monospace';
   ctx.textAlign = "right";
   ctx.textBaseline = "top";
@@ -363,11 +434,15 @@ export function drawNormsChart(canvasId: string, history: number[][]): void {
 }
 
 function generateColors(n: number): string[] {
+  const dark = isDarkMode();
   const colors: string[] = [];
   for (let i = 0; i < n; i++) {
-    const hue = (i / n) * 280; // Blue to purple range
-    const lightness = 35 + (i % 2) * 15;
-    colors.push(`hsl(${hue}, 70%, ${lightness}%)`);
+    const hue = 210 + (i / n) * 120; // Blue to purple range (210-330)
+    const saturation = dark ? 65 : 70;
+    const lightness = dark
+      ? 55 + (i % 2) * 10
+      : 35 + (i % 2) * 15;
+    colors.push(`hsl(${hue}, ${saturation}%, ${lightness}%)`);
   }
   return colors;
 }

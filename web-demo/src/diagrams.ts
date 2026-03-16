@@ -7,6 +7,10 @@
 
 // ─── Helpers ───────────────────────────────────────────────────────────
 
+function isDarkMode(): boolean {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
 function getCtx(canvasId: string): {
   ctx: CanvasRenderingContext2D;
   w: number;
@@ -46,6 +50,7 @@ function drawArrow(
 
   ctx.strokeStyle = color;
   ctx.lineWidth = width;
+  ctx.lineCap = "round";
   ctx.beginPath();
   ctx.moveTo(x1, y1);
   ctx.lineTo(x2, y2);
@@ -75,13 +80,13 @@ function drawBox(
   label: string,
   fillColor: string,
   borderColor: string,
-  textColor: string = "#333"
+  textColor: string = isDarkMode() ? "#ededef" : "#333"
 ) {
   ctx.fillStyle = fillColor;
   ctx.strokeStyle = borderColor;
   ctx.lineWidth = 1.5;
   ctx.beginPath();
-  ctx.roundRect(x, y, w, h, 4);
+  ctx.roundRect(x, y, w, h, 6);
   ctx.fill();
   ctx.stroke();
 
@@ -100,6 +105,7 @@ function drawBox(
  */
 export function drawStandardResidual(canvasId: string) {
   const { ctx, w, h } = getCtx(canvasId);
+  const dark = isDarkMode();
   const cx = w / 2;
 
   const layers = ["Input x", "Layer 1", "Layer 2", "Layer 3", "Layer 4", "Output"];
@@ -119,7 +125,7 @@ export function drawStandardResidual(canvasId: string) {
     const y2 = positions[i + 1].y + boxH / 2;
 
     // Curved skip connection
-    ctx.strokeStyle = "#ddd";
+    ctx.strokeStyle = dark ? "#3a3a40" : "#ddd";
     ctx.lineWidth = 1.5;
     ctx.setLineDash([4, 3]);
     ctx.beginPath();
@@ -129,7 +135,7 @@ export function drawStandardResidual(canvasId: string) {
     ctx.setLineDash([]);
 
     // Weight label
-    ctx.fillStyle = "#bbb";
+    ctx.fillStyle = dark ? "#555" : "#bbb";
     ctx.font = '400 10px "JetBrains Mono", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -144,7 +150,7 @@ export function drawStandardResidual(canvasId: string) {
       positions[i].y + boxH,
       cx,
       positions[i + 1].y,
-      "#999"
+      dark ? "#555" : "#999"
     );
   }
 
@@ -158,8 +164,12 @@ export function drawStandardResidual(canvasId: string) {
       boxW,
       boxH,
       layers[i],
-      isEndpoint ? "#e8edf5" : "#f5f5f5",
-      isEndpoint ? "#94a3b8" : "#ddd"
+      dark
+        ? (isEndpoint ? "#1e3a5f" : "#232326")
+        : (isEndpoint ? "#e8edf5" : "#f5f5f5"),
+      dark
+        ? (isEndpoint ? "#3b82f6" : "#3a3a40")
+        : (isEndpoint ? "#94a3b8" : "#ddd")
     );
   }
 }
@@ -172,6 +182,7 @@ export function drawStandardResidual(canvasId: string) {
  */
 export function drawComparisonStandard(canvasId: string) {
   const { ctx, w, h } = getCtx(canvasId);
+  const dark = isDarkMode();
 
   const numBars = 4;
   const barW = (w - 80) / numBars;
@@ -184,27 +195,31 @@ export function drawComparisonStandard(canvasId: string) {
     const barH = maxH * 0.7; // All equal
     const x = startX + i * barW + 4;
 
-    ctx.fillStyle = "#e0e0e0";
-    ctx.fillRect(x, baseY - barH, barW - 8, barH);
+    ctx.fillStyle = dark ? "#2e2e32" : "#e0e0e0";
+    ctx.beginPath();
+    ctx.roundRect(x, baseY - barH, barW - 8, barH, 3);
+    ctx.fill();
 
-    ctx.strokeStyle = "#ccc";
+    ctx.strokeStyle = dark ? "#3a3a40" : "#ccc";
     ctx.lineWidth = 1;
-    ctx.strokeRect(x, baseY - barH, barW - 8, barH);
+    ctx.beginPath();
+    ctx.roundRect(x, baseY - barH, barW - 8, barH, 3);
+    ctx.stroke();
 
     // Label
-    ctx.fillStyle = "#999";
+    ctx.fillStyle = dark ? "#6e6e76" : "#999";
     ctx.font = '400 10px "JetBrains Mono", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.fillText(`L${i + 1}`, x + (barW - 8) / 2, baseY + 4);
+    ctx.fillText(`L${i + 1}`, x + (barW - 8) / 2, baseY + 6);
 
     // Weight
     ctx.textBaseline = "bottom";
-    ctx.fillText("0.25", x + (barW - 8) / 2, baseY - barH - 3);
+    ctx.fillText("0.25", x + (barW - 8) / 2, baseY - barH - 4);
   }
 
   // Title
-  ctx.fillStyle = "#888";
+  ctx.fillStyle = dark ? "#6e6e76" : "#888";
   ctx.font = '500 10px "JetBrains Mono", monospace';
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
@@ -217,6 +232,7 @@ export function drawComparisonStandard(canvasId: string) {
  */
 export function drawComparisonAttnRes(canvasId: string) {
   const { ctx, w, h } = getCtx(canvasId);
+  const dark = isDarkMode();
 
   const weights = [0.12, 0.18, 0.35, 0.35]; // Learned non-uniform
   const numBars = weights.length;
@@ -230,33 +246,44 @@ export function drawComparisonAttnRes(canvasId: string) {
     const barH = (weights[i] / maxWeight) * maxH * 0.85;
     const x = startX + i * barW + 4;
 
-    // Gradient fill
+    // Gradient fill matching heatmap
     const t = weights[i] / maxWeight;
-    const r = Math.round(240 - t * 210);
-    const g = Math.round(244 - t * 186);
-    const b = Math.round(255 - t * 160);
+    let r: number, g: number, b: number;
+    if (dark) {
+      r = Math.round(26 + t * 121);
+      g = Math.round(29 + t * 168);
+      b = Math.round(46 + t * 207);
+    } else {
+      r = Math.round(240 - t * 210);
+      g = Math.round(244 - t * 186);
+      b = Math.round(255 - t * 160);
+    }
     ctx.fillStyle = `rgb(${r}, ${g}, ${b})`;
-    ctx.fillRect(x, baseY - barH, barW - 8, barH);
+    ctx.beginPath();
+    ctx.roundRect(x, baseY - barH, barW - 8, barH, 3);
+    ctx.fill();
 
-    ctx.strokeStyle = "#2563eb33";
+    ctx.strokeStyle = dark ? "rgba(96, 165, 250, 0.2)" : "#2563eb33";
     ctx.lineWidth = 1;
-    ctx.strokeRect(x, baseY - barH, barW - 8, barH);
+    ctx.beginPath();
+    ctx.roundRect(x, baseY - barH, barW - 8, barH, 3);
+    ctx.stroke();
 
     // Label
-    ctx.fillStyle = "#888";
+    ctx.fillStyle = dark ? "#6e6e76" : "#888";
     ctx.font = '400 10px "JetBrains Mono", monospace';
     ctx.textAlign = "center";
     ctx.textBaseline = "top";
-    ctx.fillText(i === 0 ? "Emb" : `B${i}`, x + (barW - 8) / 2, baseY + 4);
+    ctx.fillText(i === 0 ? "Emb" : `B${i}`, x + (barW - 8) / 2, baseY + 6);
 
     // Weight
     ctx.textBaseline = "bottom";
-    ctx.fillStyle = "#555";
-    ctx.fillText(weights[i].toFixed(2), x + (barW - 8) / 2, baseY - barH - 3);
+    ctx.fillStyle = dark ? "#a1a1a6" : "#555";
+    ctx.fillText(weights[i].toFixed(2), x + (barW - 8) / 2, baseY - barH - 4);
   }
 
   // Title
-  ctx.fillStyle = "#2563eb";
+  ctx.fillStyle = dark ? "#60a5fa" : "#2563eb";
   ctx.font = '500 10px "JetBrains Mono", monospace';
   ctx.textAlign = "center";
   ctx.textBaseline = "top";

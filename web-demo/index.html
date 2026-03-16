@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Interactive demo of Attention Residuals — replacing fixed residual connections with learned softmax attention over depth. Built with Rust + WASM." />
+  <meta name="theme-color" content="#2563eb" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#60a5fa" media="(prefers-color-scheme: dark)" />
   <title>Attention Residuals — Interactive Demo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -10,19 +13,30 @@
   <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
+  <!-- Skip to content for keyboard users -->
+  <a href="#demo" class="skip-link">Skip to interactive demo</a>
+
   <!-- ─── Navigation ──────────────────────────────────────────── -->
-  <nav class="nav">
+  <nav class="nav" role="navigation" aria-label="Main navigation">
     <div class="nav-inner">
-      <a href="#" class="nav-logo">
-        <span class="nav-logo-symbol">&#x03B1;</span>
+      <a href="#top" class="nav-logo" aria-label="AttnRes — back to top">
+        <span class="nav-logo-symbol" aria-hidden="true">&#x03B1;</span>
         <span>AttnRes</span>
       </a>
-      <div class="nav-links">
-        <a href="#problem">Problem</a>
-        <a href="#algorithm">Algorithm</a>
-        <a href="#demo">Live Demo</a>
-        <a href="#training">Training</a>
-        <a href="https://github.com/AbdelStark/attnres-rs" target="_blank" rel="noopener">GitHub</a>
+      <button class="nav-toggle" aria-expanded="false" aria-controls="nav-links" aria-label="Toggle navigation menu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="18" x2="21" y2="18" />
+        </svg>
+      </button>
+      <div class="nav-links" id="nav-links" role="list">
+        <a href="#problem" role="listitem">Problem</a>
+        <a href="#algorithm" role="listitem">Algorithm</a>
+        <a href="#demo" role="listitem">Live Demo</a>
+        <a href="#training" role="listitem">Training</a>
+        <a href="#comparison" role="listitem">Comparison</a>
+        <a href="https://github.com/AbdelStark/attnres-rs" target="_blank" rel="noopener" role="listitem">GitHub</a>
       </div>
     </div>
   </nav>
@@ -40,8 +54,8 @@
         Paper: <em>Attention as a Hypernetwork</em> (MoonshotAI / Kimi) &middot;
         Implementation: <code>attnres-rs</code> (burn framework)
       </p>
-      <div class="hero-status" id="wasm-status">
-        <span class="status-dot loading"></span>
+      <div class="hero-status" id="wasm-status" role="status" aria-live="polite">
+        <span class="status-dot loading" aria-hidden="true"></span>
         <span>Loading WASM engine&hellip;</span>
       </div>
     </div>
@@ -57,7 +71,7 @@
           <p>
             In standard Transformers, the residual connection is a simple addition:
           </p>
-          <div class="equation">
+          <div class="equation" role="math" aria-label="h sub l plus 1 equals h sub l plus F sub l of h sub l">
             h<sub>l+1</sub> = h<sub>l</sub> + F<sub>l</sub>(h<sub>l</sub>)
           </div>
           <p>
@@ -84,7 +98,7 @@
         <div class="col-viz">
           <div class="diagram" id="standard-residual-diagram">
             <div class="diagram-title">Standard Residual</div>
-            <canvas id="canvas-standard" width="320" height="400"></canvas>
+            <canvas id="canvas-standard" width="320" height="400" aria-label="Diagram showing standard residual connections with equal +1 weights between layers"></canvas>
             <div class="diagram-caption">
               All layers contribute equally (weight = 1).
               <br />No selectivity over depth.
@@ -101,23 +115,23 @@
       <div class="section-label">02</div>
       <h2>Attention Residuals: The Algorithm</h2>
 
-      <div class="algo-steps">
-        <div class="algo-step">
-          <div class="algo-step-num">1</div>
+      <div class="algo-steps" role="list">
+        <div class="algo-step" role="listitem">
+          <div class="algo-step-num" aria-hidden="true">1</div>
           <div class="algo-step-content">
             <h3>Stack block representations</h3>
             <p>
               Collect all completed block sums <strong>b<sub>0</sub>, &hellip;, b<sub>n-1</sub></strong>
               plus the current partial block into a value matrix.
             </p>
-            <div class="equation">
+            <div class="equation" role="math">
               V = [b<sub>0</sub>; b<sub>1</sub>; &hellip;; b<sub>n</sub><sup>(partial)</sup>] &ensp;&isin;&ensp; &Ropf;<sup>(N+1) &times; D</sup>
             </div>
           </div>
         </div>
 
-        <div class="algo-step">
-          <div class="algo-step-num">2</div>
+        <div class="algo-step" role="listitem">
+          <div class="algo-step-num" aria-hidden="true">2</div>
           <div class="algo-step-content">
             <h3>Normalize keys with RMSNorm</h3>
             <p>
@@ -125,14 +139,14 @@
               Without this, deeper blocks (which accumulate more layer outputs)
               would receive disproportionate weight.
             </p>
-            <div class="equation">
+            <div class="equation" role="math">
               K = RMSNorm(V) = (V / &radic;mean(V&sup2;)) &middot; &gamma;
             </div>
           </div>
         </div>
 
-        <div class="algo-step">
-          <div class="algo-step-num">3</div>
+        <div class="algo-step" role="listitem">
+          <div class="algo-step-num" aria-hidden="true">3</div>
           <div class="algo-step-content">
             <h3>Compute depth attention logits</h3>
             <p>
@@ -140,35 +154,35 @@
               scores each block. Crucially, w is <strong>initialized to zero</strong> &mdash;
               ensuring the model starts as a standard residual and smoothly transitions.
             </p>
-            <div class="equation">
+            <div class="equation" role="math">
               logits<sub>i</sub> = K<sub>i</sub> &middot; w<sub>l</sub> &ensp;&ensp; &forall; i &isin; {0, &hellip;, N}
             </div>
           </div>
         </div>
 
-        <div class="algo-step">
-          <div class="algo-step-num">4</div>
+        <div class="algo-step" role="listitem">
+          <div class="algo-step-num" aria-hidden="true">4</div>
           <div class="algo-step-content">
             <h3>Softmax over <em>depth</em></h3>
             <p>
               The softmax is taken <strong>over the block/depth dimension</strong>, not the
               sequence dimension. This is attention over <em>layers</em>, not over <em>tokens</em>.
             </p>
-            <div class="equation">
+            <div class="equation" role="math">
               &alpha;<sub>i</sub> = softmax(logits)<sub>i</sub> = exp(logits<sub>i</sub>) / &sum;<sub>j</sub> exp(logits<sub>j</sub>)
             </div>
           </div>
         </div>
 
-        <div class="algo-step">
-          <div class="algo-step-num">5</div>
+        <div class="algo-step" role="listitem">
+          <div class="algo-step-num" aria-hidden="true">5</div>
           <div class="algo-step-content">
             <h3>Weighted combination</h3>
             <p>
               The output is a learned convex combination of all block representations.
               Each layer can choose exactly how much information to draw from each depth.
             </p>
-            <div class="equation">
+            <div class="equation" role="math">
               h = &sum;<sub>i</sub> &alpha;<sub>i</sub> &middot; V<sub>i</sub>
             </div>
           </div>
@@ -198,10 +212,10 @@
       <div class="demo-panel">
         <div class="demo-controls">
           <div class="control-group">
-            <label>Model Configuration</label>
-            <div class="control-row">
+            <label id="config-label">Model Configuration</label>
+            <div class="control-row" role="group" aria-labelledby="config-label">
               <div class="control">
-                <span class="control-label">d_model</span>
+                <label class="control-label" for="cfg-d-model">d_model</label>
                 <select id="cfg-d-model">
                   <option value="16">16</option>
                   <option value="32" selected>32</option>
@@ -209,7 +223,7 @@
                 </select>
               </div>
               <div class="control">
-                <span class="control-label">Layers (sublayers)</span>
+                <label class="control-label" for="cfg-layers">Layers (sublayers)</label>
                 <select id="cfg-layers">
                   <option value="4">4</option>
                   <option value="8" selected>8</option>
@@ -218,14 +232,14 @@
                 </select>
               </div>
               <div class="control">
-                <span class="control-label">Blocks</span>
+                <label class="control-label" for="cfg-blocks">Blocks</label>
                 <select id="cfg-blocks">
                   <option value="2" selected>2</option>
                   <option value="4">4</option>
                 </select>
               </div>
               <div class="control">
-                <span class="control-label">Heads</span>
+                <label class="control-label" for="cfg-heads">Heads</label>
                 <select id="cfg-heads">
                   <option value="2">2</option>
                   <option value="4" selected>4</option>
@@ -237,12 +251,13 @@
           </div>
 
           <div class="control-group" id="query-controls" style="display:none">
-            <label>Pseudo-Query Magnitude</label>
+            <label for="query-magnitude">Pseudo-Query Magnitude</label>
             <p class="control-hint">
               Drag the slider to simulate w<sub>l</sub> evolving away from zero during training.
             </p>
-            <input type="range" id="query-magnitude" min="0" max="100" value="0" class="slider" />
-            <div class="slider-labels">
+            <input type="range" id="query-magnitude" min="0" max="100" value="0" class="slider"
+                   aria-valuemin="0" aria-valuemax="1" aria-valuenow="0" aria-valuetext="0.00 (uniform)" />
+            <div class="slider-labels" aria-hidden="true">
               <span>0.0 (uniform)</span>
               <span id="query-mag-display">0.00</span>
               <span>1.0 (selective)</span>
@@ -258,7 +273,7 @@
           <div class="result-card result-card-wide">
             <div class="result-card-header">Depth Attention Weights</div>
             <div class="result-card-body">
-              <canvas id="canvas-heatmap" width="800" height="300"></canvas>
+              <canvas id="canvas-heatmap" width="800" height="300" aria-label="Heatmap showing depth attention weights across sublayers and source blocks"></canvas>
             </div>
             <div class="result-card-footer">
               Rows: sublayers (Attn/MLP at each transformer layer). Columns: source blocks.
@@ -268,7 +283,7 @@
           <div class="result-card">
             <div class="result-card-header">Attention Distribution</div>
             <div class="result-card-body">
-              <canvas id="canvas-bar" width="400" height="250"></canvas>
+              <canvas id="canvas-bar" width="400" height="250" aria-label="Bar chart of attention weight distribution for the deepest sublayer"></canvas>
             </div>
             <div class="result-card-footer">
               At zero init, all sources receive weight 1/N (uniform). Training breaks this symmetry.
@@ -292,16 +307,16 @@
 
       <div class="training-panel">
         <div class="training-controls">
-          <button class="btn btn-primary" id="btn-train-start" disabled>Start Training</button>
-          <button class="btn" id="btn-train-reset" disabled>Reset</button>
-          <div class="training-stats">
+          <button class="btn btn-primary" id="btn-train-start" disabled aria-label="Start training simulation">Start Training</button>
+          <button class="btn" id="btn-train-reset" disabled aria-label="Reset training to initial state">Reset</button>
+          <div class="training-stats" role="group" aria-label="Training statistics">
             <div class="stat">
               <span class="stat-label">Step</span>
-              <span class="stat-value" id="train-step">0</span>
+              <span class="stat-value" id="train-step" aria-live="off">0</span>
             </div>
             <div class="stat">
               <span class="stat-label">Loss</span>
-              <span class="stat-value" id="train-loss">&mdash;</span>
+              <span class="stat-value" id="train-loss" aria-live="off">&mdash;</span>
             </div>
           </div>
         </div>
@@ -310,13 +325,15 @@
           <div class="result-card result-card-wide">
             <div class="result-card-header">Loss Curve</div>
             <div class="result-card-body">
-              <canvas id="canvas-loss" width="800" height="200"></canvas>
+              <div class="canvas-empty-state" id="loss-empty">Initialize a model and start training to see the loss curve</div>
+              <canvas id="canvas-loss" width="800" height="200" style="display:none" aria-label="Training loss curve over steps"></canvas>
             </div>
           </div>
           <div class="result-card result-card-wide">
             <div class="result-card-header">Depth Attention Heatmap (evolving)</div>
             <div class="result-card-body">
-              <canvas id="canvas-train-heatmap" width="800" height="300"></canvas>
+              <div class="canvas-empty-state" id="heatmap-empty">Depth attention patterns will appear here during training</div>
+              <canvas id="canvas-train-heatmap" width="800" height="300" style="display:none" aria-label="Evolving depth attention heatmap during training"></canvas>
             </div>
             <div class="result-card-footer">
               Watch how later layers develop stronger selectivity over depth.
@@ -326,7 +343,8 @@
           <div class="result-card result-card-wide">
             <div class="result-card-header">Pseudo-Query Norms ||w<sub>l</sub>||</div>
             <div class="result-card-body">
-              <canvas id="canvas-norms" width="800" height="200"></canvas>
+              <div class="canvas-empty-state" id="norms-empty">Pseudo-query norm evolution will appear here during training</div>
+              <canvas id="canvas-norms" width="800" height="200" style="display:none" aria-label="Multi-line chart of pseudo-query norm evolution per sublayer"></canvas>
             </div>
             <div class="result-card-footer">
               The magnitude of each pseudo-query grows from zero during training.
@@ -347,8 +365,8 @@
       <div class="comparison-grid">
         <div class="comparison-card">
           <h3>Standard Residual</h3>
-          <div class="equation">h = h<sub>l</sub> + F(h<sub>l</sub>)</div>
-          <canvas id="canvas-cmp-standard" width="300" height="200"></canvas>
+          <div class="equation" role="math">h = h<sub>l</sub> + F(h<sub>l</sub>)</div>
+          <canvas id="canvas-cmp-standard" width="300" height="200" aria-label="Bar chart showing uniform 0.25 weights for standard residual"></canvas>
           <ul>
             <li>Fixed weight = 1 per layer</li>
             <li>No selectivity over depth</li>
@@ -358,8 +376,8 @@
         </div>
         <div class="comparison-card comparison-card-highlight">
           <h3>Attention Residual</h3>
-          <div class="equation">h = &sum; &alpha;<sub>i</sub> &middot; b<sub>i</sub></div>
-          <canvas id="canvas-cmp-attnres" width="300" height="200"></canvas>
+          <div class="equation" role="math">h = &sum; &alpha;<sub>i</sub> &middot; b<sub>i</sub></div>
+          <canvas id="canvas-cmp-attnres" width="300" height="200" aria-label="Bar chart showing learned non-uniform weights for attention residual"></canvas>
           <ul>
             <li>Learned weights via softmax</li>
             <li>Selective routing over depth</li>
@@ -392,6 +410,9 @@
       </p>
     </div>
   </footer>
+
+  <!-- Toast notification container -->
+  <div class="toast-container" id="toast-container" aria-live="polite" aria-atomic="true"></div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>
