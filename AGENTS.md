@@ -49,6 +49,19 @@ benches/
 fixtures/                # Reference outputs from PyTorch
 ├── attn_res_forward.json
 └── block_state_tracking.json
+
+web-demo/                # Interactive web demo (WASM + Vite)
+├── crate/               # Rust WASM crate (pure-Rust AttnRes reimplementation)
+│   ├── Cargo.toml
+│   └── src/lib.rs       # wasm-bindgen exports: AttnResEngine
+├── src/                 # TypeScript frontend
+│   ├── main.ts          # App entry point
+│   ├── style.css        # Academic-grade styling
+│   ├── viz.ts           # Canvas 2D heatmaps, charts
+│   └── diagrams.ts      # Static architectural diagrams
+├── index.html           # Single-page app
+├── package.json         # Vite + TypeScript
+└── vite.config.ts       # Build config
 ```
 
 ## Commands
@@ -64,6 +77,11 @@ cargo bench                        # Run Criterion benchmarks
 cargo run --example train_tiny     # Train example
 cargo run --example compare_residuals  # Comparison example
 cargo run --example visualize_weights  # Visualization example
+
+# Web demo
+cd web-demo && npm run build:wasm     # Build WASM crate
+cd web-demo && npm run dev            # Start Vite dev server
+cd web-demo && npm run build          # Production build (WASM + Vite)
 ```
 
 ## Architecture Essentials
@@ -110,6 +128,16 @@ Input IDs → Embedding → [AttnResLayer × N] → RMSNorm → LM Head → Logi
 ## Source of Truth
 
 `spec.md` is the authoritative specification. All algorithm implementations must match the pseudocode and equations defined there.
+
+## Web Demo
+
+The `web-demo/` directory contains a fully interactive browser-based demo. The WASM crate (`web-demo/crate/`) is a pure-Rust reimplementation of the core AttnRes algorithm (no burn dependency for WASM portability), faithfully mirroring `src/attn_res_op.rs`. It exposes:
+
+- `AttnResEngine` — model creation, forward pass, training simulation
+- `compute_attn_res()` — interactive core operation with custom pseudo-queries
+- `train_step()` — simulated training showing depth attention pattern emergence
+
+Frontend: Vite + TypeScript with Canvas 2D visualizations (heatmaps, bar charts, loss curves). Academic design with full algorithm explanation.
 
 ## Known Gaps
 

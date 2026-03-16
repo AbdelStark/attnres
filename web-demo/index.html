@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Attention Residuals — Interactive Demo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <!-- ─── Navigation ──────────────────────────────────────────── -->
+  <nav class="nav">
+    <div class="nav-inner">
+      <a href="#" class="nav-logo">
+        <span class="nav-logo-symbol">&#x03B1;</span>
+        <span>AttnRes</span>
+      </a>
+      <div class="nav-links">
+        <a href="#problem">Problem</a>
+        <a href="#algorithm">Algorithm</a>
+        <a href="#demo">Live Demo</a>
+        <a href="#training">Training</a>
+        <a href="https://github.com/AbdelStark/attnres-rs" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ─── Hero ────────────────────────────────────────────────── -->
+  <header class="hero" id="top">
+    <div class="container">
+      <div class="hero-badge">Rust + WASM &middot; Interactive Demo</div>
+      <h1 class="hero-title">Attention Residuals</h1>
+      <p class="hero-subtitle">
+        Replacing fixed residual connections with <em>learned softmax attention over depth</em>.
+        <br />Each layer selectively routes information from all preceding blocks.
+      </p>
+      <p class="hero-meta">
+        Paper: <em>Attention as a Hypernetwork</em> (MoonshotAI / Kimi) &middot;
+        Implementation: <code>attnres-rs</code> (burn framework)
+      </p>
+      <div class="hero-status" id="wasm-status">
+        <span class="status-dot loading"></span>
+        <span>Loading WASM engine&hellip;</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ─── Section 1: The Problem ──────────────────────────────── -->
+  <section class="section" id="problem">
+    <div class="container">
+      <div class="section-label">01</div>
+      <h2>The Problem with Standard Residuals</h2>
+      <div class="two-col">
+        <div class="col-text">
+          <p>
+            In standard Transformers, the residual connection is a simple addition:
+          </p>
+          <div class="equation">
+            h<sub>l+1</sub> = h<sub>l</sub> + F<sub>l</sub>(h<sub>l</sub>)
+          </div>
+          <p>
+            Every layer contributes <strong>equally</strong> to the output, regardless of whether
+            its representation is useful at a given position. In deep networks (100+ layers),
+            this creates two problems:
+          </p>
+          <ol>
+            <li>
+              <strong>Information dilution.</strong> Early layers&rsquo; features get progressively
+              washed out as more layers add to the sum. The signal-to-noise ratio degrades with depth.
+            </li>
+            <li>
+              <strong>No selective routing.</strong> A layer that computed a &ldquo;useful&rdquo;
+              representation has the same weight as one that computed noise. There is no mechanism
+              to <em>choose</em> which layers matter.
+            </li>
+          </ol>
+          <p class="insight">
+            <strong>Key insight:</strong> What if each layer could <em>attend</em> to all
+            prior layers and dynamically decide how much weight to assign each one?
+          </p>
+        </div>
+        <div class="col-viz">
+          <div class="diagram" id="standard-residual-diagram">
+            <div class="diagram-title">Standard Residual</div>
+            <canvas id="canvas-standard" width="320" height="400"></canvas>
+            <div class="diagram-caption">
+              All layers contribute equally (weight = 1).
+              <br />No selectivity over depth.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Section 2: The Algorithm ────────────────────────────── -->
+  <section class="section section-alt" id="algorithm">
+    <div class="container">
+      <div class="section-label">02</div>
+      <h2>Attention Residuals: The Algorithm</h2>
+
+      <div class="algo-steps">
+        <div class="algo-step">
+          <div class="algo-step-num">1</div>
+          <div class="algo-step-content">
+            <h3>Stack block representations</h3>
+            <p>
+              Collect all completed block sums <strong>b<sub>0</sub>, &hellip;, b<sub>n-1</sub></strong>
+              plus the current partial block into a value matrix.
+            </p>
+            <div class="equation">
+              V = [b<sub>0</sub>; b<sub>1</sub>; &hellip;; b<sub>n</sub><sup>(partial)</sup>] &ensp;&isin;&ensp; &Ropf;<sup>(N+1) &times; D</sup>
+            </div>
+          </div>
+        </div>
+
+        <div class="algo-step">
+          <div class="algo-step-num">2</div>
+          <div class="algo-step-content">
+            <h3>Normalize keys with RMSNorm</h3>
+            <p>
+              Prevent large-magnitude blocks from dominating attention logits.
+              Without this, deeper blocks (which accumulate more layer outputs)
+              would receive disproportionate weight.
+            </p>
+            <div class="equation">
+              K = RMSNorm(V) = (V / &radic;mean(V&sup2;)) &middot; &gamma;
+            </div>
+          </div>
+        </div>
+
+        <div class="algo-step">
+          <div class="algo-step-num">3</div>
+          <div class="algo-step-content">
+            <h3>Compute depth attention logits</h3>
+            <p>
+              A learned pseudo-query <strong>w<sub>l</sub></strong> &isin; &Ropf;<sup>D</sup>
+              scores each block. Crucially, w is <strong>initialized to zero</strong> &mdash;
+              ensuring the model starts as a standard residual and smoothly transitions.
+            </p>
+            <div class="equation">
+              logits<sub>i</sub> = K<sub>i</sub> &middot; w<sub>l</sub> &ensp;&ensp; &forall; i &isin; {0, &hellip;, N}
+            </div>
+          </div>
+        </div>
+
+        <div class="algo-step">
+          <div class="algo-step-num">4</div>
+          <div class="algo-step-content">
+            <h3>Softmax over <em>depth</em></h3>
+            <p>
+              The softmax is taken <strong>over the block/depth dimension</strong>, not the
+              sequence dimension. This is attention over <em>layers</em>, not over <em>tokens</em>.
+            </p>
+            <div class="equation">
+              &alpha;<sub>i</sub> = softmax(logits)<sub>i</sub> = exp(logits<sub>i</sub>) / &sum;<sub>j</sub> exp(logits<sub>j</sub>)
+            </div>
+          </div>
+        </div>
+
+        <div class="algo-step">
+          <div class="algo-step-num">5</div>
+          <div class="algo-step-content">
+            <h3>Weighted combination</h3>
+            <p>
+              The output is a learned convex combination of all block representations.
+              Each layer can choose exactly how much information to draw from each depth.
+            </p>
+            <div class="equation">
+              h = &sum;<sub>i</sub> &alpha;<sub>i</sub> &middot; V<sub>i</sub>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>Two AttnRes per transformer layer.</strong> Each transformer layer has two sublayers
+        (self-attention + MLP). Both sublayers get their <em>own</em> AttnRes operation with its
+        own learned pseudo-query w<sub>l</sub>. This means each sublayer independently decides
+        which prior blocks are most relevant for its computation.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Section 3: Interactive Demo ─────────────────────────── -->
+  <section class="section" id="demo">
+    <div class="container">
+      <div class="section-label">03</div>
+      <h2>Interactive: Core AttnRes Operation</h2>
+      <p class="section-intro">
+        Adjust the pseudo-query weights and observe how the attention distribution over
+        depth changes in real time. With zero weights (initialization), all sources
+        receive equal attention. As weights evolve during training, selective patterns emerge.
+      </p>
+
+      <div class="demo-panel">
+        <div class="demo-controls">
+          <div class="control-group">
+            <label>Model Configuration</label>
+            <div class="control-row">
+              <div class="control">
+                <span class="control-label">d_model</span>
+                <select id="cfg-d-model">
+                  <option value="16">16</option>
+                  <option value="32" selected>32</option>
+                  <option value="64">64</option>
+                </select>
+              </div>
+              <div class="control">
+                <span class="control-label">Layers (sublayers)</span>
+                <select id="cfg-layers">
+                  <option value="4">4</option>
+                  <option value="8" selected>8</option>
+                  <option value="12">12</option>
+                  <option value="16">16</option>
+                </select>
+              </div>
+              <div class="control">
+                <span class="control-label">Blocks</span>
+                <select id="cfg-blocks">
+                  <option value="2" selected>2</option>
+                  <option value="4">4</option>
+                </select>
+              </div>
+              <div class="control">
+                <span class="control-label">Heads</span>
+                <select id="cfg-heads">
+                  <option value="2">2</option>
+                  <option value="4" selected>4</option>
+                  <option value="8">8</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="btn-init-model">Initialize Model</button>
+          </div>
+
+          <div class="control-group" id="query-controls" style="display:none">
+            <label>Pseudo-Query Magnitude</label>
+            <p class="control-hint">
+              Drag the slider to simulate w<sub>l</sub> evolving away from zero during training.
+            </p>
+            <input type="range" id="query-magnitude" min="0" max="100" value="0" class="slider" />
+            <div class="slider-labels">
+              <span>0.0 (uniform)</span>
+              <span id="query-mag-display">0.00</span>
+              <span>1.0 (selective)</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="demo-results" id="demo-results" style="display:none">
+          <div class="result-card">
+            <div class="result-card-header">Model Info</div>
+            <div class="result-card-body" id="model-info-display"></div>
+          </div>
+          <div class="result-card result-card-wide">
+            <div class="result-card-header">Depth Attention Weights</div>
+            <div class="result-card-body">
+              <canvas id="canvas-heatmap" width="800" height="300"></canvas>
+            </div>
+            <div class="result-card-footer">
+              Rows: sublayers (Attn/MLP at each transformer layer). Columns: source blocks.
+              Brighter = higher attention weight.
+            </div>
+          </div>
+          <div class="result-card">
+            <div class="result-card-header">Attention Distribution</div>
+            <div class="result-card-body">
+              <canvas id="canvas-bar" width="400" height="250"></canvas>
+            </div>
+            <div class="result-card-footer">
+              At zero init, all sources receive weight 1/N (uniform). Training breaks this symmetry.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Section 4: Training Simulation ──────────────────────── -->
+  <section class="section section-alt" id="training">
+    <div class="container">
+      <div class="section-label">04</div>
+      <h2>Training: Watching Patterns Emerge</h2>
+      <p class="section-intro">
+        Observe how depth attention patterns evolve during training. The pseudo-query
+        vectors w<sub>l</sub> start at zero (uniform attention) and gradually learn to
+        selectively attend to the most useful blocks at each depth.
+      </p>
+
+      <div class="training-panel">
+        <div class="training-controls">
+          <button class="btn btn-primary" id="btn-train-start" disabled>Start Training</button>
+          <button class="btn" id="btn-train-reset" disabled>Reset</button>
+          <div class="training-stats">
+            <div class="stat">
+              <span class="stat-label">Step</span>
+              <span class="stat-value" id="train-step">0</span>
+            </div>
+            <div class="stat">
+              <span class="stat-label">Loss</span>
+              <span class="stat-value" id="train-loss">&mdash;</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="training-viz">
+          <div class="result-card result-card-wide">
+            <div class="result-card-header">Loss Curve</div>
+            <div class="result-card-body">
+              <canvas id="canvas-loss" width="800" height="200"></canvas>
+            </div>
+          </div>
+          <div class="result-card result-card-wide">
+            <div class="result-card-header">Depth Attention Heatmap (evolving)</div>
+            <div class="result-card-body">
+              <canvas id="canvas-train-heatmap" width="800" height="300"></canvas>
+            </div>
+            <div class="result-card-footer">
+              Watch how later layers develop stronger selectivity over depth.
+              Early layers tend to stay closer to uniform; deep layers learn clear preferences.
+            </div>
+          </div>
+          <div class="result-card result-card-wide">
+            <div class="result-card-header">Pseudo-Query Norms ||w<sub>l</sub>||</div>
+            <div class="result-card-body">
+              <canvas id="canvas-norms" width="800" height="200"></canvas>
+            </div>
+            <div class="result-card-footer">
+              The magnitude of each pseudo-query grows from zero during training.
+              Larger norms = more selective (less uniform) attention.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Section 5: Comparison ───────────────────────────────── -->
+  <section class="section" id="comparison">
+    <div class="container">
+      <div class="section-label">05</div>
+      <h2>Standard Residual vs. AttnRes</h2>
+
+      <div class="comparison-grid">
+        <div class="comparison-card">
+          <h3>Standard Residual</h3>
+          <div class="equation">h = h<sub>l</sub> + F(h<sub>l</sub>)</div>
+          <canvas id="canvas-cmp-standard" width="300" height="200"></canvas>
+          <ul>
+            <li>Fixed weight = 1 per layer</li>
+            <li>No selectivity over depth</li>
+            <li>Information dilution in deep models</li>
+            <li>Zero learnable parameters added</li>
+          </ul>
+        </div>
+        <div class="comparison-card comparison-card-highlight">
+          <h3>Attention Residual</h3>
+          <div class="equation">h = &sum; &alpha;<sub>i</sub> &middot; b<sub>i</sub></div>
+          <canvas id="canvas-cmp-attnres" width="300" height="200"></canvas>
+          <ul>
+            <li>Learned weights via softmax</li>
+            <li>Selective routing over depth</li>
+            <li>Preserves signal in deep networks</li>
+            <li>+D params per sublayer (negligible)</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="callout">
+        <strong>Block AttnRes reduces overhead.</strong> Instead of attending to every individual
+        layer (quadratic), Block AttnRes groups layers into N blocks and attends over blocks.
+        With typical N=4&ndash;8 blocks for a 100-layer model, the overhead is minimal.
+      </div>
+    </div>
+  </section>
+
+  <!-- ─── Footer ──────────────────────────────────────────────── -->
+  <footer class="footer">
+    <div class="container">
+      <p>
+        <strong>attnres-rs</strong> &middot; First Rust implementation of Attention Residuals
+        &middot; Built with <a href="https://burn.dev" target="_blank" rel="noopener">burn</a>
+        + WASM
+      </p>
+      <p class="footer-sub">
+        Paper: <em>Attention as a Hypernetwork</em> (MoonshotAI / Kimi)
+        &middot;
+        <a href="https://github.com/AbdelStark/attnres-rs" target="_blank" rel="noopener">Source Code</a>
+      </p>
+    </div>
+  </footer>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

@@ -63,6 +63,19 @@ AttnResTransformer
 
 **Note on `num_layers`**: This parameter counts *sublayers* (each transformer layer = 2 sublayers: attention + MLP). So `num_layers=8` means 4 transformer layers.
 
+## Web Demo
+
+An interactive browser-based demo runs the core AttnRes algorithm via Rust compiled to WASM:
+
+```bash
+cd web-demo
+npm install
+npm run build:wasm   # Compile Rust → WASM (requires wasm-pack)
+npm run dev          # Start dev server at localhost:5173
+```
+
+Features: configurable model parameters, live depth attention heatmaps, training simulation with loss curves, standard vs AttnRes comparison. No GPU required — runs entirely in the browser.
+
 ## Examples
 
 ```bash
