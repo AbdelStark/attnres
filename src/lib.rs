@@ -35,6 +35,7 @@ pub mod feed_forward;
 pub mod layer;
 pub mod model;
 pub mod rms_norm;
+pub mod serialization;
 pub mod two_phase;
 pub mod utils;
 
@@ -47,4 +48,5 @@ pub use feed_forward::{FeedForward, FeedForwardConfig};
 pub use layer::AttnResLayer;
 pub use model::AttnResTransformer;
 pub use rms_norm::{RmsNorm, RmsNormConfig};
+pub use serialization::SerializationError;
 pub use utils::causal_mask;
