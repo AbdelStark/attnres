@@ -9,7 +9,7 @@ use burn::nn::{Embedding, EmbeddingConfig, Linear, LinearConfig};
 use burn::prelude::*;
 
 use crate::block_state::BlockState;
-use crate::config::AttnResConfig;
+use crate::config::{AttnResConfig, ConfigError};
 use crate::layer::AttnResLayer;
 use crate::rms_norm::{RmsNorm, RmsNormConfig};
 use crate::two_phase::{
@@ -29,6 +29,16 @@ pub struct AttnResTransformer<B: Backend> {
 }
 
 impl AttnResConfig {
+    /// Initialize the full AttnRes Transformer model, returning a typed error
+    /// for invalid user-supplied configuration.
+    pub fn try_init_model<B: Backend>(
+        &self,
+        device: &B::Device,
+    ) -> Result<AttnResTransformer<B>, ConfigError> {
+        self.try_validate()?;
+        Ok(self.init_model(device))
+    }
+
     /// Initialize the full AttnRes Transformer model.
     ///
     /// # Panics
@@ -266,5 +276,15 @@ mod tests {
         let hidden = model.forward_hidden(input_ids, None);
 
         assert_eq!(hidden.dims(), [1, 8, 32]);
+    }
+
+    #[test]
+    fn test_try_init_model_returns_typed_error() {
+        let device = Default::default();
+        let config = AttnResConfig::new(32, 4, 2).with_num_heads(0);
+        assert!(matches!(
+            config.try_init_model::<TestBackend>(&device),
+            Err(ConfigError::NumHeadsMustBePositive)
+        ));
     }
 }

@@ -27,6 +27,7 @@ impl MultiHeadAttentionConfig {
     /// # Panics
     /// Panics if `d_model` is not divisible by `num_heads`.
     pub fn init<B: Backend>(&self, device: &B::Device) -> MultiHeadAttention<B> {
+        assert!(self.num_heads > 0, "num_heads must be positive, got 0");
         assert!(
             self.d_model.is_multiple_of(self.num_heads),
             "d_model ({}) must be divisible by num_heads ({})",

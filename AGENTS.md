@@ -1,147 +1,88 @@
-# AGENTS.md — AI Agent Technical Context
+# AGENTS.md
 
-## Project Overview
+## Project Identity
 
-**attnres** is the first Rust implementation of Attention Residuals (MoonshotAI/Kimi paper) using the [burn](https://github.com/tracel-ai/burn) deep learning framework. It provides a drop-in replacement for standard residual connections in Transformers.
+`attnres` is a Rust library that implements Attention Residuals for burn-based
+Transformer experiments, plus examples, benchmarks, and a web demo.
 
-## Tech Stack
+## Current State
 
-| Component   | Technology       | Version  |
-|-------------|-----------------|----------|
-| Language    | Rust            | 2021 edition (1.80+) |
-| ML Framework| burn            | 0.20     |
-| Test Backend| NdArray         | (CPU, deterministic) |
-| Testing     | cargo test + proptest + criterion | — |
-| Linting     | clippy + rustfmt | —       |
-| CI          | GitHub Actions   | test, clippy, fmt, build-examples |
+- Status: alpha as of March 16, 2026.
+- Suitable for: research, examples, local experimentation, integration work on
+  trusted inputs.
+- Not yet suitable for: production inference services, validated GPU claims,
+  PyTorch checkpoint interchange, or a stable 1.0 API promise.
+- Important gap: there is no dedicated `spec.md` in this checkout. Use
+  [ARCHITECTURE.md](ARCHITECTURE.md), README, module docs, and tests as the
+  current source of truth.
 
-## Project Structure
+## Verified Commands
 
-```
-src/
-├── lib.rs              # Public API re-exports + module declarations
-├── config.rs           # AttnResConfig — validated builder pattern (JSON save/load)
-├── attn_res_op.rs      # Core AttnRes operation (depth-wise softmax attention)
-├── block_state.rs      # BlockState — cumulative block representation tracking
-├── layer.rs            # AttnResLayer — transformer layer with dual AttnRes
-├── model.rs            # AttnResTransformer — full model with standard + two-phase forward
-├── rms_norm.rs         # RMSNorm implementation
-├── serialization.rs    # Model weight save/load (NamedMpk, binary, compact formats)
-├── two_phase.rs        # Two-phase inference primitives (phase1_batched, online_softmax_merge)
-├── attention.rs        # Multi-head self-attention
-├── feed_forward.rs     # Two-layer MLP with GELU activation
-└── utils.rs            # Causal mask generation helpers
-
-tests/
-├── unit_tests.rs       # Core algorithm correctness tests
-├── differential_tests.rs # PyTorch reference comparison tests
-├── property_tests.rs   # proptest property-based tests
-└── integration_tests.rs # Full model training loop tests
-
-examples/
-├── train_tiny.rs       # Train a small model on synthetic data
-├── compare_residuals.rs # Compare AttnRes vs standard residuals
-└── visualize_weights.rs # Visualize depth attention patterns
-
-benches/
-└── attn_res_benchmark.rs # Criterion benchmarks
-
-fixtures/                # Reference outputs from PyTorch
-├── attn_res_forward.json
-└── block_state_tracking.json
-
-web-demo/                # Interactive web demo (WASM + Vite)
-├── crate/               # Rust WASM crate (pure-Rust AttnRes reimplementation)
-│   ├── Cargo.toml
-│   └── src/lib.rs       # wasm-bindgen exports: AttnResEngine
-├── src/                 # TypeScript frontend
-│   ├── main.ts          # App entry point
-│   ├── style.css        # Academic-grade styling
-│   ├── viz.ts           # Canvas 2D heatmaps, charts
-│   └── diagrams.ts      # Static architectural diagrams
-├── index.html           # Single-page app
-├── package.json         # Vite + TypeScript
-└── vite.config.ts       # Build config
-```
-
-## Commands
+These commands were run successfully during the latest quality pass:
 
 ```bash
-cargo build                        # Build the project
-cargo test --all-features          # Run all 87 tests
-cargo test test_name               # Run specific test
-cargo clippy -- -D warnings        # Lint (warnings = errors)
-cargo fmt                          # Format code
-cargo fmt -- --check               # Check formatting without modifying
-cargo bench                        # Run Criterion benchmarks
-cargo run --example train_tiny     # Train example
-cargo run --example compare_residuals  # Comparison example
-cargo run --example visualize_weights  # Visualization example
-
-# Web demo
-cd web-demo && npm run build:wasm     # Build WASM crate
-cd web-demo && npm run dev            # Start Vite dev server
-cd web-demo && npm run build          # Production build (WASM + Vite)
+cargo fmt -- --check
+cargo clippy -- -D warnings
+cargo test --all-features
+cargo build --examples
+cd web-demo && npm run build
 ```
 
-## Architecture Essentials
+Additional useful commands:
 
-### Core Algorithm (AttnRes)
-
-Standard residual: `x_{l+1} = x_l + f_l(x_l)` (fixed unit weights)
-
-AttnRes: `x_{l+1} = Σ α_i · v_i` where α = softmax(w_l · RMSNorm(V)) over depth dimension
-
-Key invariants:
-1. **Zero-init pseudo-queries** → starts as uniform averaging (standard residual behavior)
-2. **Two AttnRes per transformer layer** — one before self-attention, one before MLP
-3. **Softmax over depth** (block/layer dimension), NOT over sequence tokens
-4. **RMSNorm on keys** to prevent magnitude domination
-5. **Block boundaries** at every `block_size/2` sublayers
-
-### Data Flow
-
-```
-Input IDs → Embedding → [AttnResLayer × N] → RMSNorm → LM Head → Logits
-                              ↓
-                    AttnResOp(pre-attn) → RMSNorm → MultiHeadAttention
-                    AttnResOp(pre-mlp)  → RMSNorm → FeedForward
+```bash
+cargo bench
+cargo doc --open
 ```
 
-### Configuration
+## Architecture Map
 
-`AttnResConfig::new(d_model, num_layers, num_blocks)` where:
-- `d_model`: Hidden dimension
-- `num_layers`: Number of **sublayers** (transformer layers × 2)
-- `num_blocks`: Number of blocks for Block AttnRes (set = num_layers for Full AttnRes)
+- `src/config.rs`: `AttnResConfig`, `ConfigError`, validation helpers.
+- `src/attn_res_op.rs`: core depth-attention residual operator.
+- `src/block_state.rs`: completed blocks + current partial block.
+- `src/layer.rs`: one Transformer layer with two AttnRes operations.
+- `src/model.rs`: full model, hidden-state forward, two-phase forward.
+- `src/two_phase.rs`: batched inter-block pass + online softmax merge.
+- `src/attention.rs`: multi-head self-attention.
+- `src/feed_forward.rs`: two-layer GELU MLP.
+- `src/rms_norm.rs`: RMSNorm for 3D and 4D tensors.
+- `src/serialization.rs`: burn-record save/load helpers.
+- `tests/`: unit, integration, property, and differential coverage.
+- `examples/demo_tui.rs`: terminal demo with live routing visualization.
+- `web-demo/`: WASM crate plus Vite frontend.
 
-## Boundaries
+## Non-Negotiable Invariants
 
-### Read-Only (never modify)
-- `spec.md`, `paper.md`, `research_report.md`, `implementation_plan.md`, `LICENSE`
+- Pseudo-query vectors start at zero.
+- Depth softmax is over block/layer sources, not tokens.
+- Each Transformer layer uses two AttnRes operations.
+- Block boundaries are defined in sublayer space.
+- `BlockState.blocks[0]` is the embedding block.
+- Internal invariant failures should panic loudly rather than produce silent
+  wrong outputs.
 
-### Gated (requires approval)
-- `Cargo.toml` (dependency changes)
-- `.github/workflows/` (CI changes)
-- `cargo publish`
+## Conventions
 
-## Source of Truth
+- Prefer `try_validate`, `try_init_model`, `try_init_layer`, and `try_init_op`
+  for untrusted config input. Panic-based constructors remain for trusted,
+  hard-coded configs.
+- Keep tensor shape comments short and accurate when code would otherwise be
+  hard to parse.
+- Add tests for every algorithm or boundary-condition change.
+- Keep README and roadmap claims tied to commands or tests that actually ran.
 
-`spec.md` is the authoritative specification. All algorithm implementations must match the pseudocode and equations defined there.
+## Constraints
 
-## Web Demo
+- Do not modify `LICENSE`.
+- Do not change dependency versions in `Cargo.toml` without approval.
+- Do not change `.github/workflows/` without approval.
+- Do not claim backend support, benchmark numbers, or checkpoint compatibility
+  unless the repository validates them.
 
-The `web-demo/` directory contains a fully interactive browser-based demo. The WASM crate (`web-demo/crate/`) is a pure-Rust reimplementation of the core AttnRes algorithm (no burn dependency for WASM portability), faithfully mirroring `src/attn_res_op.rs`. It exposes:
+## Gotchas
 
-- `AttnResEngine` — model creation, forward pass, training simulation
-- `compute_attn_res()` — interactive core operation with custom pseudo-queries
-- `train_step()` — simulated training showing depth attention pattern emergence
-
-Frontend: Vite + TypeScript with Canvas 2D visualizations (heatmaps, bar charts, loss curves). Academic design with full algorithm explanation.
-
-## Known Gaps
-
-- No PyTorch checkpoint loading (safetensors format)
-- GPU backends (wgpu, CUDA, Metal) untested
-- No distributed training support
-- Pre-trained weight import/export utilities
+- `num_layers` counts sublayers, not full Transformer blocks.
+- Full AttnRes means `num_blocks == num_layers`, so block boundaries can occur
+  between attention and MLP inside one Transformer layer.
+- The web demo is a separate pure-Rust reimplementation for WASM portability;
+  do not assume it automatically stays in sync with `src/` without verification.

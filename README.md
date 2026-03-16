@@ -1,38 +1,50 @@
-<p align="center">
-  <strong>attnres</strong>
-</p>
+# attnres
 
-<p align="center">
-  <em>Learned depth attention for Transformers. Replaces fixed residual connections with softmax attention over layers.</em>
-</p>
+`attnres` is a Rust library that implements Attention Residuals for
+[burn](https://github.com/tracel-ai/burn)-based Transformer experiments.
 
-<p align="center">
-  <a href="https://github.com/AbdelStark/attnres/actions"><img src="https://github.com/AbdelStark/attnres/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="https://crates.io/crates/attnres"><img src="https://img.shields.io/crates/v/attnres.svg" alt="crates.io"></a>
-  <a href="https://docs.rs/attnres"><img src="https://img.shields.io/docsrs/attnres" alt="docs.rs"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
-</p>
+[![CI](https://github.com/AbdelStark/attnres/actions/workflows/ci.yml/badge.svg)](https://github.com/AbdelStark/attnres/actions/workflows/ci.yml)
+[![crates.io](https://img.shields.io/crates/v/attnres.svg)](https://crates.io/crates/attnres)
+[![docs.rs](https://img.shields.io/docsrs/attnres)](https://docs.rs/attnres)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
----
+## What This Is
 
-The first Rust implementation of [**Attention Residuals**](https://github.com/MoonshotAI/Attention-Residuals) (MoonshotAI / Kimi). Built on [burn](https://github.com/tracel-ai/burn). Runs on CPU, CUDA, Metal, and wgpu.
+Attention Residuals replace fixed residual additions with learned softmax
+attention over prior depth states. This repository provides:
 
-Standard residual connections add every layer's output with equal weight. In deep networks, this dilutes early representations and offers no mechanism to *choose* which layers matter. **AttnRes** replaces the fixed `h + F(h)` with a learned softmax over all prior block representations, giving each layer selective, content-aware access to the full depth of the network.
+- A reusable Rust library for the core AttnRes components.
+- A reference Transformer implementation built on burn.
+- Two-phase inference utilities, serialization helpers, benchmarks, and demos.
+- A browser demo (`web-demo/`) and a terminal demo (`demo_tui`).
 
-The result: **1.25x compute advantage** at **< 2% inference overhead**.
+## Why It Exists
 
-## How It Works
+The project exists to make the Attention Residuals paper practical in Rust:
+readable source, deterministic CPU tests, and enough examples to inspect the
+algorithm instead of treating it as a black box.
 
-```
-Standard Residual              Attention Residual
-─────────────────              ──────────────────
-h = h_l + F(h_l)              V = [b₀; b₁; …; bₙ]      ← stack all blocks
-    └─ fixed +1               K = RMSNorm(V)             ← normalize keys
-                               α = softmax(K · w_l)      ← depth attention
-                               h = Σ αᵢ · Vᵢ             ← weighted combination
-```
+## Who It Is For
 
-Each transformer layer has **two** AttnRes operations (before self-attention and before MLP), each with its own learned pseudo-query vector **w_l** initialized to zero. At initialization, all available sources receive equal weight. During training, the model learns to selectively route information from the most relevant depths.
+- Researchers validating the paper or adapting the idea to new models.
+- Rust engineers experimenting with burn-based Transformer components.
+- Contributors who want a small, testable reference implementation.
+
+## Current Status
+
+As of March 16, 2026, `attnres` is **alpha**. It is suitable for research,
+examples, local experimentation, and library integration work on trusted
+inputs. It is **not yet suitable** for production inference services,
+checkpoint interchange with PyTorch ecosystems, or GPU-backed deployments that
+require validated performance and operational guarantees.
+
+Known limitations:
+
+- CI exercises the NdArray backend; GPU backends compile via burn but are not
+  validated here.
+- No PyTorch or `safetensors` checkpoint import/export.
+- No compatibility promise for a stable 1.0 public API yet.
+- No dedicated formal spec document is checked into this repository today.
 
 ## Quick Start
 
@@ -44,193 +56,128 @@ burn = { version = "0.20", features = ["ndarray"] }
 
 ```rust
 use attnres::{AttnResConfig, AttnResTransformer};
-use burn::prelude::*;
 use burn::backend::NdArray;
+use burn::prelude::*;
 
 type B = NdArray;
 
 let device = Default::default();
-let config = AttnResConfig::new(128, 8, 2)  // d_model, 8 sublayers, 2 blocks
+let config = AttnResConfig::new(128, 8, 2)
     .with_num_heads(4)
     .with_vocab_size(1000);
 
-let model: AttnResTransformer<B> = config.init_model(&device);
-let input = Tensor::<B, 2, Int>::zeros([1, 16], &device);
-let logits = model.forward(input, None);  // [1, 16, 1000]
+let model: AttnResTransformer<B> = config
+    .try_init_model(&device)
+    .expect("hard-coded config should be valid");
+
+let input_ids = Tensor::<B, 2, Int>::zeros([1, 16], &device);
+let logits = model.forward(input_ids, None);
+assert_eq!(logits.dims(), [1, 16, 1000]);
 ```
 
-## Interactive TUI Demo
+Use `try_validate` / `try_init_model` when configuration can come from user
+input, files, or other untrusted sources. The panic-based `validate` /
+`init_model` helpers are retained for trusted, hard-coded setups.
 
-Watch the algorithm come alive. The TUI demo trains a model in real time and visualizes depth attention patterns evolving from uniform to selective:
+## Core Concepts
 
-```bash
-cargo run --example demo_tui --release
-```
-
-<table>
-  <tr>
-    <td width="50%" align="center">
-      <img src="docs/assets/img/attnres-tui-demo-1.png" width="100%" alt="Overview view of the redesigned AttnRes TUI showing live telemetry, routing heatmap, and event feed">
-      <br />
-      <sub><strong>1. Overview</strong> — live training telemetry, block topology, routing heatmap, and event feed.</sub>
-    </td>
-    <td width="50%" align="center">
-      <img src="docs/assets/img/attnres-tui-demo-2.png" width="100%" alt="Pipeline view of the redesigned AttnRes TUI showing selected sublayer drilldown and algorithm steps">
-      <br />
-      <sub><strong>2. Pipeline</strong> — selected sublayer drilldown, pre-softmax scores, routing mass, and the 5-step AttnRes trace.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" align="center">
-      <img src="docs/assets/img/attnres-tui-demo-3.png" width="100%" alt="Inference view of the redesigned AttnRes TUI showing two-phase schedule and merge observability">
-      <br />
-      <sub><strong>3. Inference</strong> — two-phase scheduling, cache-vs-partial merge behavior, and parity checks.</sub>
-    </td>
-    <td width="50%" align="center">
-      <img src="docs/assets/img/attnres-tui-demo-4.png" width="100%" alt="Compact view of the redesigned AttnRes TUI in a smaller terminal layout">
-      <br />
-      <sub><strong>4. Compact Mode</strong> — condensed terminal layout that keeps the core observability usable in smaller shells.</sub>
-    </td>
-  </tr>
-</table>
-
-**Controls:** `Space` start/pause | `Up/Down` speed | `Left/Right` inspect sublayers | `Tab` or `1/2/3` switch views | `?` help | `r` reset | `q` quit
-
-**What you're seeing:**
-- **Overview** — Live training telemetry, loss stream, block topology, routing heatmap, and event feed
-- **Pipeline** — Selected sublayer drilldown with pre-softmax logits, routing mass, and a narrated 5-step AttnRes trace
-- **Inference** — Two-phase scheduling, cache vs partial merge behavior, and parity checks against standard forward
-- **Depth Routing Heatmap** — Actual softmax attention weights computed from the model's pseudo-query vectors and block states. Rows are sublayers, columns are source blocks (`Emb`, `B1`, ..., `Part`)
+- `num_layers` counts **sublayers**, not full Transformer blocks.
+- Each Transformer layer has **two** AttnRes operations: one before attention,
+  one before the MLP.
+- The softmax runs over the **depth/block dimension**, not over tokens.
+- Pseudo-query vectors must start at zero to recover uniform averaging at
+  initialization.
+- Block states are cumulative sums inside a block, plus a list of completed
+  blocks.
 
 ## Architecture
 
+```text
+Input IDs
+  -> Embedding
+  -> BlockState::new(embeddings)
+  -> AttnResLayer x N
+       -> AttnResOp (pre-attn)
+       -> RMSNorm
+       -> MultiHeadAttention
+       -> AttnResOp (pre-mlp)
+       -> RMSNorm
+       -> FeedForward
+  -> Final RMSNorm
+  -> LM head
+  -> Logits
 ```
-AttnResTransformer
-  ├── Token Embedding
-  ├── AttnResLayer ×N              ← N = num_layers / 2 (each layer = 2 sublayers)
-  │     ├── AttnResOp              ← depth attention before self-attention
-  │     │     ├── RMSNorm(V)       ← normalize stacked blocks
-  │     │     ├── K · w_l          ← pseudo-query scores each block
-  │     │     └── softmax → Σ αV   ← weighted combination
-  │     ├── RMSNorm + MultiHeadAttention
-  │     ├── AttnResOp              ← depth attention before MLP
-  │     └── RMSNorm + FeedForward
-  ├── Final RMSNorm
-  └── LM Head
-```
 
-**Block AttnRes** groups layers into N blocks. With `num_blocks=4` for a 100-layer model, the attention operates over 4 block representations instead of 100 individual layers — keeping overhead minimal while retaining the selective routing benefit.
+Repository map:
 
-> **Note on `num_layers`:** This counts *sublayers*. Each transformer layer has 2 sublayers (attention + MLP), so `num_layers=8` creates 4 transformer layers.
+- `src/config.rs`: configuration, validation, and typed config errors.
+- `src/attn_res_op.rs`: the core depth-attention residual operator.
+- `src/block_state.rs`: completed blocks plus the current partial block.
+- `src/layer.rs`: one Transformer layer with dual AttnRes sublayers.
+- `src/model.rs`: end-to-end model and two-phase forward path.
+- `src/two_phase.rs`: the paper's two-phase inference primitives.
+- `src/serialization.rs`: save/load helpers for burn record formats.
+- `tests/`: unit, integration, property, and differential coverage.
+- `web-demo/`: WASM crate plus a Vite front-end.
 
-## Features
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the detailed module map and
+invariants.
 
-- **Full algorithm** — AttnResOp, BlockState tracking, RMSNorm, block boundary management
-- **Two-phase inference** — Batched inter-block + sequential intra-block attention (Algorithm 1 from the paper)
-- **Serialization** — Save/load via burn records (NamedMpk, binary, compact half-precision) + JSON config
-- **Backend-generic** — Runs on any burn backend: NdArray (CPU), wgpu (cross-platform GPU), CUDA, Metal
-- **Zero-cost initialization** — Pseudo-queries start at zero; AttnRes begins as standard residual
-- **Comprehensive tests** — 87 tests: unit, differential, property-based (proptest), integration, doctest
-- **Interactive demos** — Terminal TUI + browser WASM demo with live visualizations
+## Examples And Demos
 
-## Examples
+Rust examples:
 
 ```bash
-# Interactive TUI training visualization (recommended first experience)
-cargo run --example demo_tui --release
-
-# Train a small model on synthetic data
-cargo run --example train_tiny
-
-# Compare standard residuals vs AttnRes on same architecture
 cargo run --example compare_residuals
-
-# Visualize depth attention weight patterns
+cargo run --example train_tiny
 cargo run --example visualize_weights
+cargo run --example demo_tui --release
 ```
 
-## Web Demo
-
-An interactive browser demo runs the core algorithm via Rust compiled to WebAssembly:
+Web demo:
 
 ```bash
 cd web-demo
 npm install
-npm run build:wasm   # Requires wasm-pack + wasm32-unknown-unknown target
-npm run dev          # localhost:5173
+npm run build
 ```
 
-Configurable model parameters, live heatmaps, training simulation, and standard vs AttnRes comparison — all running in the browser with no GPU required.
+`npm run build` invokes the WASM build and the Vite production build. It
+requires `wasm-pack` and the `wasm32-unknown-unknown` Rust target.
 
 ## Development
 
+The following commands were verified on this checkout during the March 16, 2026
+quality pass:
+
 ```bash
-cargo build                        # Build
-cargo test --all-features          # 87 tests (unit + differential + property + integration + doctest)
-cargo clippy -- -D warnings        # Lint
-cargo fmt                          # Format
-cargo bench                        # Criterion benchmarks
-cargo doc --open                   # Documentation
+cargo fmt -- --check
+cargo clippy -- -D warnings
+cargo test --all-features
+cargo build --examples
+cd web-demo && npm run build
 ```
 
-## Key Implementation Details
+Additional useful commands:
 
-These are the invariants that make AttnRes correct. Getting any of them wrong breaks training:
-
-| Invariant | Why |
-|---|---|
-| **Zero-init pseudo-queries** | Ensures AttnRes starts as standard residual (uniform 1/N weights). Random init destabilizes training. |
-| **Two AttnRes per layer** | One before self-attention, one before MLP. Each has its own w_l. |
-| **Softmax over depth** | Attention is over the block/depth dimension (dim=0), NOT the sequence dimension. This is attention over *layers*. |
-| **RMSNorm on keys** | Prevents blocks with large accumulated magnitudes from dominating the attention logits. |
-| **Cumulative block sums** | `blocks[n]` is the sum of all layer outputs in block n, not individual layer outputs. |
-
-## Project Structure
-
-```
-src/
-  lib.rs              Public API re-exports
-  config.rs           AttnResConfig (builder pattern)
-  attn_res_op.rs      Core depth attention operation
-  block_state.rs      Block state tracking
-  layer.rs            AttnResLayer (2 AttnRes + attention + MLP)
-  model.rs            AttnResTransformer (full model)
-  rms_norm.rs         RMSNorm (3D + 4D)
-  attention.rs        Multi-head self-attention
-  feed_forward.rs     MLP (SwiGLU-style)
-  serialization.rs    Model save/load
-  two_phase.rs        Two-phase inference optimization
-  utils.rs            Causal mask helper
-
-tests/                Unit, differential, property-based, integration
-examples/             train_tiny, compare_residuals, visualize_weights, demo_tui
-benches/              Criterion benchmarks
-web-demo/             Interactive WASM browser demo (Vite + TypeScript)
+```bash
+cargo bench
+cargo doc --open
 ```
 
-## Citation
+## Documentation And Contributor Entry Points
 
-If you use this implementation in your research:
+- [ARCHITECTURE.md](ARCHITECTURE.md): module map, data flow, invariants.
+- [ROADMAP.md](ROADMAP.md): current status, milestones, known limitations.
+- [CONTRIBUTING.md](CONTRIBUTING.md): setup, expectations, verification steps.
+- [CHANGELOG.md](CHANGELOG.md): user-visible changes.
+- [AGENTS.md](AGENTS.md) / [CLAUDE.md](CLAUDE.md): current agent context.
 
-```bibtex
-@software{attnres_rust,
-  author = {Abdel},
-  title = {attnres: Attention Residuals in Rust},
-  url = {https://github.com/AbdelStark/attnres},
-  year = {2026}
-}
-```
+## Help
 
-Original paper:
-
-```bibtex
-@article{attention_residuals,
-  title = {Attention Residuals},
-  author = {Kimi Team, MoonshotAI},
-  year = {2026},
-  url = {https://github.com/MoonshotAI/Attention-Residuals}
-}
-```
+Open an issue in the GitHub repository for bugs, incorrect docs, or feature
+requests. If you are changing algorithm behavior, include the failing test or
+paper reference that motivated the change.
 
 ## License
 

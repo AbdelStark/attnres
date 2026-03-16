@@ -8,6 +8,89 @@
 ///
 /// Paper reference: Section 3, Block Attention Residuals.
 use burn::config::Config;
+use std::fmt::{Display, Formatter};
+
+/// Typed validation failures for [`AttnResConfig`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum ConfigError {
+    /// `d_model` must be strictly positive.
+    DModelMustBePositive,
+    /// `num_layers` must be strictly positive.
+    NumLayersMustBePositive,
+    /// `num_blocks` must be strictly positive.
+    NumBlocksMustBePositive,
+    /// `num_heads` must be strictly positive.
+    NumHeadsMustBePositive,
+    /// `num_layers` counts sublayers and must therefore be even.
+    NumLayersMustBeEven { num_layers: usize },
+    /// `num_layers` must divide `num_blocks` evenly.
+    NumLayersMustBeDivisibleByNumBlocks {
+        num_layers: usize,
+        num_blocks: usize,
+    },
+    /// `d_model` must divide `num_heads` evenly.
+    DModelMustBeDivisibleByNumHeads { d_model: usize, num_heads: usize },
+    /// `vocab_size` must be strictly positive.
+    VocabSizeMustBePositive,
+    /// `rms_norm_eps` must be strictly positive.
+    RmsNormEpsMustBePositive { rms_norm_eps: f64 },
+    /// `dropout` must be in the inclusive range `[0.0, 1.0]`.
+    DropoutOutOfRange { dropout: f64 },
+    /// The default `4 * d_model` MLP expansion overflowed `usize`.
+    EffectiveFeedForwardDimOverflow { d_model: usize },
+    /// `layer_idx` exceeded the configured layer count.
+    LayerIndexOutOfRange {
+        layer_idx: usize,
+        num_transformer_layers: usize,
+    },
+}
+
+impl Display for ConfigError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::DModelMustBePositive => write!(f, "d_model must be positive, got 0"),
+            Self::NumLayersMustBePositive => write!(f, "num_layers must be positive, got 0"),
+            Self::NumBlocksMustBePositive => write!(f, "num_blocks must be positive, got 0"),
+            Self::NumHeadsMustBePositive => write!(f, "num_heads must be positive, got 0"),
+            Self::NumLayersMustBeEven { num_layers } => write!(
+                f,
+                "num_layers ({num_layers}) must be even (each transformer layer = 2 sublayers: attn + MLP)"
+            ),
+            Self::NumLayersMustBeDivisibleByNumBlocks {
+                num_layers,
+                num_blocks,
+            } => write!(
+                f,
+                "num_layers ({num_layers}) must be divisible by num_blocks ({num_blocks})"
+            ),
+            Self::DModelMustBeDivisibleByNumHeads { d_model, num_heads } => write!(
+                f,
+                "d_model ({d_model}) must be divisible by num_heads ({num_heads})"
+            ),
+            Self::VocabSizeMustBePositive => write!(f, "vocab_size must be positive, got 0"),
+            Self::RmsNormEpsMustBePositive { rms_norm_eps } => write!(
+                f,
+                "rms_norm_eps must be positive, got {rms_norm_eps}"
+            ),
+            Self::DropoutOutOfRange { dropout } => {
+                write!(f, "dropout must be in [0.0, 1.0], got {dropout}")
+            }
+            Self::EffectiveFeedForwardDimOverflow { d_model } => write!(
+                f,
+                "effective d_ff overflow: 4 * d_model ({d_model}) exceeds usize"
+            ),
+            Self::LayerIndexOutOfRange {
+                layer_idx,
+                num_transformer_layers,
+            } => write!(
+                f,
+                "layer_idx ({layer_idx}) must be < num_transformer_layers ({num_transformer_layers})"
+            ),
+        }
+    }
+}
+
+impl std::error::Error for ConfigError {}
 
 #[derive(Config, Debug)]
 pub struct AttnResConfig {
@@ -39,57 +122,90 @@ pub struct AttnResConfig {
 }
 
 impl AttnResConfig {
+    /// Validate this configuration and return a typed error instead of panicking.
+    pub fn try_validate(&self) -> Result<(), ConfigError> {
+        if self.d_model == 0 {
+            return Err(ConfigError::DModelMustBePositive);
+        }
+        if self.num_layers == 0 {
+            return Err(ConfigError::NumLayersMustBePositive);
+        }
+        if self.num_blocks == 0 {
+            return Err(ConfigError::NumBlocksMustBePositive);
+        }
+        if self.num_heads == 0 {
+            return Err(ConfigError::NumHeadsMustBePositive);
+        }
+        if !self.num_layers.is_multiple_of(2) {
+            return Err(ConfigError::NumLayersMustBeEven {
+                num_layers: self.num_layers,
+            });
+        }
+        if !self.num_layers.is_multiple_of(self.num_blocks) {
+            return Err(ConfigError::NumLayersMustBeDivisibleByNumBlocks {
+                num_layers: self.num_layers,
+                num_blocks: self.num_blocks,
+            });
+        }
+        if !self.d_model.is_multiple_of(self.num_heads) {
+            return Err(ConfigError::DModelMustBeDivisibleByNumHeads {
+                d_model: self.d_model,
+                num_heads: self.num_heads,
+            });
+        }
+        if self.vocab_size == 0 {
+            return Err(ConfigError::VocabSizeMustBePositive);
+        }
+        if self.rms_norm_eps <= 0.0 {
+            return Err(ConfigError::RmsNormEpsMustBePositive {
+                rms_norm_eps: self.rms_norm_eps,
+            });
+        }
+        if !(0.0..=1.0).contains(&self.dropout) {
+            return Err(ConfigError::DropoutOutOfRange {
+                dropout: self.dropout,
+            });
+        }
+
+        self.try_effective_d_ff()?;
+        Ok(())
+    }
+
     /// Validate that this configuration is internally consistent.
     ///
     /// # Panics
     /// Panics with a descriptive message if any constraint is violated.
     pub fn validate(&self) {
-        assert!(self.d_model > 0, "d_model must be positive, got 0");
-        assert!(self.num_layers > 0, "num_layers must be positive, got 0");
-        assert!(self.num_blocks > 0, "num_blocks must be positive, got 0");
-        assert!(
-            self.num_layers.is_multiple_of(2),
-            "num_layers ({}) must be even (each transformer layer = 2 sublayers: attn + MLP)",
-            self.num_layers
-        );
-        assert!(
-            self.num_layers.is_multiple_of(self.num_blocks),
-            "num_layers ({}) must be divisible by num_blocks ({})",
-            self.num_layers,
-            self.num_blocks
-        );
-        assert!(
-            self.d_model.is_multiple_of(self.num_heads),
-            "d_model ({}) must be divisible by num_heads ({})",
-            self.d_model,
-            self.num_heads
-        );
-        assert!(self.vocab_size > 0, "vocab_size must be positive, got 0");
-        assert!(
-            self.rms_norm_eps > 0.0,
-            "rms_norm_eps must be positive, got {}",
-            self.rms_norm_eps
-        );
-        assert!(
-            (0.0..=1.0).contains(&self.dropout),
-            "dropout must be in [0.0, 1.0], got {}",
-            self.dropout
-        );
+        if let Err(err) = self.try_validate() {
+            panic!("{err}");
+        }
     }
 
     /// Sublayers per block (S = L / N).
     ///
     /// # Panics
     /// Panics if `num_blocks` is zero or doesn't divide `num_layers`.
+    pub fn try_block_size(&self) -> Result<usize, ConfigError> {
+        if self.num_layers == 0 {
+            return Err(ConfigError::NumLayersMustBePositive);
+        }
+        if self.num_blocks == 0 {
+            return Err(ConfigError::NumBlocksMustBePositive);
+        }
+        if !self.num_layers.is_multiple_of(self.num_blocks) {
+            return Err(ConfigError::NumLayersMustBeDivisibleByNumBlocks {
+                num_layers: self.num_layers,
+                num_blocks: self.num_blocks,
+            });
+        }
+        Ok(self.num_layers / self.num_blocks)
+    }
+
     pub fn block_size(&self) -> usize {
-        assert!(self.num_blocks > 0, "num_blocks must be positive");
-        assert!(
-            self.num_layers.is_multiple_of(self.num_blocks),
-            "num_layers ({}) must be divisible by num_blocks ({})",
-            self.num_layers,
-            self.num_blocks
-        );
-        self.num_layers / self.num_blocks
+        match self.try_block_size() {
+            Ok(block_size) => block_size,
+            Err(err) => panic!("{err}"),
+        }
     }
 
     /// Whether this is Full AttnRes (N = L) or Block AttnRes (N < L).
@@ -99,17 +215,48 @@ impl AttnResConfig {
 
     /// Effective feed-forward intermediate dimension.
     /// Returns `d_ff` if explicitly set, otherwise `4 * d_model`.
-    pub fn effective_d_ff(&self) -> usize {
+    pub fn try_effective_d_ff(&self) -> Result<usize, ConfigError> {
         if self.d_ff == 0 {
-            4 * self.d_model
+            self.d_model
+                .checked_mul(4)
+                .ok_or(ConfigError::EffectiveFeedForwardDimOverflow {
+                    d_model: self.d_model,
+                })
         } else {
-            self.d_ff
+            Ok(self.d_ff)
+        }
+    }
+
+    pub fn effective_d_ff(&self) -> usize {
+        match self.try_effective_d_ff() {
+            Ok(d_ff) => d_ff,
+            Err(err) => panic!("{err}"),
         }
     }
 
     /// Number of transformer layers (each transformer layer = 2 sublayers).
     pub fn num_transformer_layers(&self) -> usize {
         self.num_layers / 2
+    }
+
+    /// Validate a zero-based transformer-layer index against this config.
+    pub fn try_validate_layer_idx(&self, layer_idx: usize) -> Result<(), ConfigError> {
+        self.try_validate()?;
+        let num_transformer_layers = self.num_transformer_layers();
+        if layer_idx >= num_transformer_layers {
+            return Err(ConfigError::LayerIndexOutOfRange {
+                layer_idx,
+                num_transformer_layers,
+            });
+        }
+        Ok(())
+    }
+
+    /// Validate a zero-based transformer-layer index, panicking on failure.
+    pub fn validate_layer_idx(&self, layer_idx: usize) {
+        if let Err(err) = self.try_validate_layer_idx(layer_idx) {
+            panic!("{err}");
+        }
     }
 }
 
@@ -161,6 +308,12 @@ mod tests {
     }
 
     #[test]
+    fn test_try_validate_good_config() {
+        let config = AttnResConfig::new(64, 12, 4).with_num_heads(8);
+        assert!(config.try_validate().is_ok());
+    }
+
+    #[test]
     #[should_panic(expected = "must be even")]
     fn test_validate_odd_num_layers() {
         let config = AttnResConfig::new(64, 11, 1);
@@ -171,6 +324,13 @@ mod tests {
     #[should_panic(expected = "d_model (64) must be divisible by num_heads (5)")]
     fn test_validate_bad_num_heads() {
         let config = AttnResConfig::new(64, 12, 4).with_num_heads(5);
+        config.validate();
+    }
+
+    #[test]
+    #[should_panic(expected = "num_heads must be positive")]
+    fn test_validate_zero_num_heads() {
+        let config = AttnResConfig::new(64, 12, 4).with_num_heads(0);
         config.validate();
     }
 
@@ -211,5 +371,37 @@ mod tests {
         let config = AttnResConfig::new(64, 12, 12);
         assert_eq!(config.block_size(), 1);
         assert!(config.is_full());
+    }
+
+    #[test]
+    fn test_try_validate_reports_typed_error() {
+        let config = AttnResConfig::new(64, 12, 4).with_num_heads(0);
+        assert_eq!(
+            config.try_validate(),
+            Err(ConfigError::NumHeadsMustBePositive)
+        );
+    }
+
+    #[test]
+    fn test_try_effective_d_ff_overflow() {
+        let config = AttnResConfig::new(usize::MAX, 2, 1).with_num_heads(1);
+        assert_eq!(
+            config.try_effective_d_ff(),
+            Err(ConfigError::EffectiveFeedForwardDimOverflow {
+                d_model: usize::MAX
+            })
+        );
+    }
+
+    #[test]
+    fn test_try_validate_layer_idx_rejects_out_of_range() {
+        let config = AttnResConfig::new(64, 12, 4).with_num_heads(8);
+        assert_eq!(
+            config.try_validate_layer_idx(6),
+            Err(ConfigError::LayerIndexOutOfRange {
+                layer_idx: 6,
+                num_transformer_layers: 6
+            })
+        );
     }
 }

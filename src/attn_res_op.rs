@@ -17,7 +17,7 @@ use burn::module::{Module, Param};
 use burn::prelude::*;
 use burn::tensor::activation::softmax;
 
-use crate::config::AttnResConfig;
+use crate::config::{AttnResConfig, ConfigError};
 use crate::rms_norm::{RmsNorm, RmsNormConfig};
 
 #[derive(Module, Debug)]
@@ -30,6 +30,12 @@ pub struct AttnResOp<B: Backend> {
 }
 
 impl AttnResConfig {
+    /// Initialize a single AttnResOp, returning a typed error for invalid config.
+    pub fn try_init_op<B: Backend>(&self, device: &B::Device) -> Result<AttnResOp<B>, ConfigError> {
+        self.try_validate()?;
+        Ok(self.init_op(device))
+    }
+
     /// Initialize a single AttnResOp with zero pseudo-query.
     ///
     /// The pseudo-query is zero-initialized per the paper's requirement for

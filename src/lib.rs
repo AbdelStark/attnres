@@ -43,7 +43,7 @@ pub mod utils;
 pub use attention::{MultiHeadAttention, MultiHeadAttentionConfig};
 pub use attn_res_op::AttnResOp;
 pub use block_state::BlockState;
-pub use config::AttnResConfig;
+pub use config::{AttnResConfig, ConfigError};
 pub use feed_forward::{FeedForward, FeedForwardConfig};
 pub use layer::AttnResLayer;
 pub use model::AttnResTransformer;

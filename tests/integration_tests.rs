@@ -184,11 +184,10 @@ fn test_save_load_preserves_forward() {
     let out_before = model.forward(input.clone(), None);
 
     let path = std::env::temp_dir().join("attnres_integ_save_load");
-    let path_str = path.to_str().unwrap();
-    model.save(path_str, &device).expect("Failed to save");
+    model.save(&path, &device).expect("Failed to save");
 
     let loaded: AttnResTransformer<TestBackend> =
-        AttnResTransformer::load(path_str, &config, &device).expect("Failed to load");
+        AttnResTransformer::load(&path, &config, &device).expect("Failed to load");
     let out_after = loaded.forward(input, None);
 
     let diff: f32 = (out_before - out_after).abs().max().into_scalar();
@@ -197,7 +196,7 @@ fn test_save_load_preserves_forward() {
         "Loaded model should match saved model, diff={diff}"
     );
 
-    let _ = std::fs::remove_file(format!("{path_str}.mpk"));
+    let _ = std::fs::remove_file(path.with_extension("mpk"));
 }
 
 #[test]

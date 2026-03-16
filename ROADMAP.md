@@ -1,59 +1,140 @@
-# attnres Roadmap
+# Roadmap
 
-## Current Phase: Alpha (v0.2.0)
+## Current State
 
-Core algorithm, serialization, and two-phase inference implemented. 87 tests passing. Suitable for research and experimentation.
+As of March 16, 2026, this project is **alpha**. It is suitable for research,
+examples, and local experimentation with burn-based Transformer models. It is
+not yet suitable for production inference services, backend portability claims,
+or ecosystem checkpoint interchange. Breaking changes are still possible before
+1.0.
 
----
+## Next Three Milestones
 
-## v0.1.0 — Core Implementation ✅
+### 1. API Hardening And Source-Of-Truth Docs
 
-- [x] AttnResOp: Block AttnRes forward pass with depth-wise softmax
-- [x] BlockState: Cumulative block representation tracking
-- [x] RMSNorm: Custom implementation for key normalization
-- [x] AttnResLayer: Transformer layer with dual AttnRes (pre-attention + pre-MLP)
-- [x] AttnResTransformer: Full model with embedding, LM head, causal masking
-- [x] MultiHeadAttention: Standard multi-head self-attention
-- [x] FeedForward: Two-layer MLP with GELU activation
-- [x] TwoPhase: Two-phase inference optimization (standalone)
-- [x] Config: Validated configuration with builder pattern
-- [x] Zero initialization of pseudo-query vectors
-- [x] CI pipeline (test, clippy, fmt, build-examples)
-- [x] 3 examples (train_tiny, compare_residuals, visualize_weights)
-- [x] Criterion benchmarks
-- [x] Upgrade to burn 0.20
+What it means:
 
-## v0.2.0 — Serialization & Inference ✅
+- Public APIs fail predictably on bad input.
+- Contributors can understand the architecture and invariants without reading
+  every file.
 
-- [x] Model weight save/load (NamedMpk default, binary, compact/half-precision formats)
-- [x] Config save/load (JSON via burn's Config trait)
-- [x] Integrate two-phase inference into main `forward_two_phase` method
-- [x] Layer accessor methods for two-phase inference components
-- [x] 87 tests passing (unit, differential, property-based, integration, doctest)
-- [ ] Pre-trained weight loading from PyTorch checkpoints
-- [ ] Model export utilities
+Exit criteria:
 
-## v0.3.0 — GPU & Performance (Planned)
+- All public config entry points have typed failure paths.
+- Repository docs stop making unverified claims.
+- A dedicated algorithm/spec document exists in-repo.
 
-- [ ] Test and validate wgpu backend
-- [ ] Test and validate CUDA backend (via burn-cuda)
-- [ ] Test and validate Metal backend (via burn-tch)
-- [ ] GPU-specific benchmarks
-- [ ] Memory optimization for large models
-- [ ] KV-cache support for autoregressive generation
+Scope:
 
-## v0.4.0 — Production Readiness (Planned)
+- Config validation, docs, contributor guidance, release notes discipline.
 
-- [ ] Distributed training support
-- [ ] Mixed precision (fp16/bf16) training
-- [ ] Gradient checkpointing for memory efficiency
-- [ ] Comprehensive documentation with examples
-- [ ] Publish to crates.io
+Deferred:
 
-## Future Ideas
+- Performance tuning and new backend support.
 
-- Full AttnRes mode (per-layer, not per-block) benchmarks at scale
-- Integration examples with popular Rust inference frameworks
-- ONNX export
-- Quantization support (INT8/INT4)
-- Streaming/chunked inference for long sequences
+Dependencies:
+
+- None beyond current codebase.
+
+Estimated complexity:
+
+- Medium
+
+### 2. Backend Validation And Performance Baselines
+
+What it means:
+
+- The project can make evidence-based statements about supported backends and
+  performance.
+
+Exit criteria:
+
+- At least one non-NdArray backend is exercised in CI or documented as
+  validated manually with reproducible steps.
+- Benchmarks exist for standard forward, two-phase forward, and serialization.
+- README statements about performance and backend support cite repository data.
+
+Scope:
+
+- Backend test matrix, benchmark baselines, profiling notes.
+
+Deferred:
+
+- Distributed training and serving infrastructure.
+
+Dependencies:
+
+- Milestone 1 docs discipline to avoid repeating unsupported claims.
+
+Estimated complexity:
+
+- Large
+
+### 3. Checkpoint Interchange And Release Discipline
+
+What it means:
+
+- Users can move model state into and out of this library with less manual glue.
+
+Exit criteria:
+
+- PyTorch or `safetensors` checkpoint story is documented and implemented.
+- Release checklist is followed for a tagged version with changelog entries.
+- Compatibility expectations for saved artifacts are written down.
+
+Scope:
+
+- Import/export utilities, release documentation, artifact compatibility notes.
+
+Deferred:
+
+- Hosted model registry or remote serving integrations.
+
+Dependencies:
+
+- Milestones 1 and 2.
+
+Estimated complexity:
+
+- Large
+
+## Known Limitations Register
+
+Missing:
+
+- Formal algorithm/spec document in-repo.
+- PyTorch checkpoint loading.
+- Stable 1.0 API guarantees.
+
+Fragile:
+
+- GPU backend claims are not backed by automated validation in this repo.
+- Two-phase inference has good equivalence coverage but limited benchmark data.
+
+Performance ceilings:
+
+- Only small local benchmarks exist today.
+- No KV-cache or long-context serving path.
+
+Operational knowledge still implicit:
+
+- Release process is not documented beyond local verification commands.
+- Production observability guidance does not apply because this is a library,
+  not an operated service.
+
+## Release Readiness Snapshot
+
+Checked now:
+
+- `cargo fmt -- --check`
+- `cargo clippy -- -D warnings`
+- `cargo test --all-features`
+- `cargo build --examples`
+- `cd web-demo && npm run build`
+
+Still required before any production-ready claim:
+
+- Formal spec/source-of-truth algorithm document.
+- Validated non-CPU backend support.
+- Evidence-backed performance envelope.
+- Checkpoint interchange story.

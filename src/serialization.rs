@@ -34,7 +34,7 @@
 /// let loaded: AttnResTransformer<B> = AttnResTransformer::load("my_model", &config, &device)
 ///     .expect("Failed to load");
 /// ```
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use burn::module::Module;
 use burn::prelude::*;
@@ -89,6 +89,10 @@ impl From<burn::record::RecorderError> for SerializationError {
     }
 }
 
+fn display_path(path: &Path) -> String {
+    path.display().to_string()
+}
+
 impl<B: Backend> AttnResTransformer<B> {
     /// Save model weights using the default recorder (NamedMpk, full precision).
     ///
@@ -100,12 +104,17 @@ impl<B: Backend> AttnResTransformer<B> {
     ///
     /// # Errors
     /// Returns [`SerializationError::SaveFailed`] if the file cannot be written.
-    pub fn save(&self, path: &str, _device: &B::Device) -> Result<(), SerializationError> {
+    pub fn save<P: AsRef<Path>>(
+        &self,
+        path: P,
+        _device: &B::Device,
+    ) -> Result<(), SerializationError> {
+        let path = path.as_ref();
         let recorder = DefaultRecorder::default();
         recorder
             .record(self.clone().into_record(), PathBuf::from(path))
             .map_err(|e| SerializationError::SaveFailed {
-                path: path.to_string(),
+                path: display_path(path),
                 detail: format!("{e:?}"),
             })?;
         Ok(())
@@ -123,15 +132,16 @@ impl<B: Backend> AttnResTransformer<B> {
     /// # Errors
     /// Returns [`SerializationError::LoadFailed`] if the file cannot be read or
     /// the record is incompatible with the given config.
-    pub fn load(
-        path: &str,
+    pub fn load<P: AsRef<Path>>(
+        path: P,
         config: &AttnResConfig,
         device: &B::Device,
     ) -> Result<Self, SerializationError> {
+        let path = path.as_ref();
         let recorder = DefaultRecorder::default();
         let record = recorder.load(PathBuf::from(path), device).map_err(|e| {
             SerializationError::LoadFailed {
-                path: path.to_string(),
+                path: display_path(path),
                 detail: format!("{e:?}"),
             }
         })?;
@@ -145,12 +155,13 @@ impl<B: Backend> AttnResTransformer<B> {
     ///
     /// # Errors
     /// Returns [`SerializationError::SaveFailed`] if the file cannot be written.
-    pub fn save_compact(&self, path: &str) -> Result<(), SerializationError> {
+    pub fn save_compact<P: AsRef<Path>>(&self, path: P) -> Result<(), SerializationError> {
+        let path = path.as_ref();
         let recorder = CompactRecorder::default();
         recorder
             .record(self.clone().into_record(), PathBuf::from(path))
             .map_err(|e| SerializationError::SaveFailed {
-                path: path.to_string(),
+                path: display_path(path),
                 detail: format!("{e:?}"),
             })?;
         Ok(())
@@ -160,15 +171,16 @@ impl<B: Backend> AttnResTransformer<B> {
     ///
     /// # Errors
     /// Returns [`SerializationError::LoadFailed`] if the file cannot be read.
-    pub fn load_compact(
-        path: &str,
+    pub fn load_compact<P: AsRef<Path>>(
+        path: P,
         config: &AttnResConfig,
         device: &B::Device,
     ) -> Result<Self, SerializationError> {
+        let path = path.as_ref();
         let recorder = NamedMpkFileRecorder::<HalfPrecisionSettings>::default();
         let record = recorder.load(PathBuf::from(path), device).map_err(|e| {
             SerializationError::LoadFailed {
-                path: path.to_string(),
+                path: display_path(path),
                 detail: format!("{e:?}"),
             }
         })?;
@@ -182,12 +194,13 @@ impl<B: Backend> AttnResTransformer<B> {
     ///
     /// # Errors
     /// Returns [`SerializationError::SaveFailed`] if the file cannot be written.
-    pub fn save_binary(&self, path: &str) -> Result<(), SerializationError> {
+    pub fn save_binary<P: AsRef<Path>>(&self, path: P) -> Result<(), SerializationError> {
+        let path = path.as_ref();
         let recorder = BinFileRecorder::<FullPrecisionSettings>::default();
         recorder
             .record(self.clone().into_record(), PathBuf::from(path))
             .map_err(|e| SerializationError::SaveFailed {
-                path: path.to_string(),
+                path: display_path(path),
                 detail: format!("{e:?}"),
             })?;
         Ok(())
@@ -197,15 +210,16 @@ impl<B: Backend> AttnResTransformer<B> {
     ///
     /// # Errors
     /// Returns [`SerializationError::LoadFailed`] if the file cannot be read.
-    pub fn load_binary(
-        path: &str,
+    pub fn load_binary<P: AsRef<Path>>(
+        path: P,
         config: &AttnResConfig,
         device: &B::Device,
     ) -> Result<Self, SerializationError> {
+        let path = path.as_ref();
         let recorder = BinFileRecorder::<FullPrecisionSettings>::default();
         let record = recorder.load(PathBuf::from(path), device).map_err(|e| {
             SerializationError::LoadFailed {
-                path: path.to_string(),
+                path: display_path(path),
                 detail: format!("{e:?}"),
             }
         })?;
@@ -236,11 +250,10 @@ mod tests {
 
         // Save and load
         let path = std::env::temp_dir().join("attnres_test_save_load");
-        let path_str = path.to_str().unwrap();
-        model.save(path_str, &device).expect("Failed to save");
+        model.save(&path, &device).expect("Failed to save");
 
         let loaded: AttnResTransformer<TestBackend> =
-            AttnResTransformer::load(path_str, &config, &device).expect("Failed to load");
+            AttnResTransformer::load(&path, &config, &device).expect("Failed to load");
         let out_after = loaded.forward(input, None);
 
         let diff: f32 = (out_before - out_after).abs().max().into_scalar();
@@ -250,7 +263,7 @@ mod tests {
         );
 
         // Cleanup
-        let _ = std::fs::remove_file(format!("{path_str}.mpk"));
+        let _ = std::fs::remove_file(path.with_extension("mpk"));
     }
 
     #[test]
@@ -266,13 +279,10 @@ mod tests {
         let out_before = model.forward(input.clone(), None);
 
         let path = std::env::temp_dir().join("attnres_test_save_load_compact");
-        let path_str = path.to_str().unwrap();
-        model
-            .save_compact(path_str)
-            .expect("Failed to save compact");
+        model.save_compact(&path).expect("Failed to save compact");
 
         let loaded: AttnResTransformer<TestBackend> =
-            AttnResTransformer::load_compact(path_str, &config, &device)
+            AttnResTransformer::load_compact(&path, &config, &device)
                 .expect("Failed to load compact");
         let out_after = loaded.forward(input, None);
 
@@ -284,7 +294,7 @@ mod tests {
         );
 
         // Cleanup
-        let _ = std::fs::remove_file(format!("{path_str}.mpk"));
+        let _ = std::fs::remove_file(path.with_extension("mpk"));
     }
 
     #[test]
@@ -300,11 +310,10 @@ mod tests {
         let out_before = model.forward(input.clone(), None);
 
         let path = std::env::temp_dir().join("attnres_test_save_load_bin");
-        let path_str = path.to_str().unwrap();
-        model.save_binary(path_str).expect("Failed to save binary");
+        model.save_binary(&path).expect("Failed to save binary");
 
         let loaded: AttnResTransformer<TestBackend> =
-            AttnResTransformer::load_binary(path_str, &config, &device)
+            AttnResTransformer::load_binary(&path, &config, &device)
                 .expect("Failed to load binary");
         let out_after = loaded.forward(input, None);
 
@@ -315,7 +324,7 @@ mod tests {
         );
 
         // Cleanup
-        let _ = std::fs::remove_file(format!("{path_str}.bin"));
+        let _ = std::fs::remove_file(path.with_extension("bin"));
     }
 
     #[test]

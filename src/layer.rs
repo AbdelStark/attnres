@@ -11,7 +11,7 @@ use burn::prelude::*;
 use crate::attention::MultiHeadAttention;
 use crate::attn_res_op::AttnResOp;
 use crate::block_state::BlockState;
-use crate::config::AttnResConfig;
+use crate::config::{AttnResConfig, ConfigError};
 use crate::feed_forward::FeedForward;
 use crate::rms_norm::RmsNorm;
 
@@ -38,6 +38,17 @@ pub struct AttnResLayer<B: Backend> {
 }
 
 impl AttnResConfig {
+    /// Initialize a single AttnResLayer, returning a typed error for invalid
+    /// configuration or out-of-range layer indices.
+    pub fn try_init_layer<B: Backend>(
+        &self,
+        layer_idx: usize,
+        device: &B::Device,
+    ) -> Result<AttnResLayer<B>, ConfigError> {
+        self.try_validate_layer_idx(layer_idx)?;
+        Ok(self.init_layer(layer_idx, device))
+    }
+
     /// Initialize a single AttnResLayer.
     ///
     /// # Arguments
@@ -46,6 +57,8 @@ impl AttnResConfig {
     ///   `layer_idx % (block_size / 2) == 0`).
     /// * `device` - Device to allocate tensors on.
     pub fn init_layer<B: Backend>(&self, layer_idx: usize, device: &B::Device) -> AttnResLayer<B> {
+        self.validate_layer_idx(layer_idx);
+
         AttnResLayer {
             layer_idx,
             block_size: self.block_size(),
@@ -228,5 +241,18 @@ mod tests {
             2,
             "Layer 1 should add a block at boundary"
         );
+    }
+
+    #[test]
+    fn test_try_init_layer_rejects_out_of_range_index() {
+        let device = Default::default();
+        let config = AttnResConfig::new(32, 4, 2).with_num_heads(4);
+        assert!(matches!(
+            config.try_init_layer::<TestBackend>(2, &device),
+            Err(ConfigError::LayerIndexOutOfRange {
+                layer_idx: 2,
+                num_transformer_layers: 2,
+            })
+        ));
     }
 }
