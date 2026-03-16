@@ -1,0 +1,25 @@
+[package]
+name = "attnres-rs"
+version = "0.1.0"
+edition = "2021"
+description = "Attention Residuals (MoonshotAI/Kimi) implementation in Rust using burn"
+license = "MIT"
+repository = "https://github.com/AbdelStark/attnres-rs"
+keywords = ["deep-learning", "transformer", "attention", "residual", "burn"]
+categories = ["science"]
+
+[dependencies]
+burn = { version = "0.16", features = ["ndarray", "autodiff", "train"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+proptest = "1"
+
+[[example]]
+name = "train_tiny"
+path = "examples/train_tiny.rs"
+
+[[example]]
+name = "compare_residuals"
+path = "examples/compare_residuals.rs"

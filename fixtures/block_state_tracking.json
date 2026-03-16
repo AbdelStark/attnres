@@ -1,0 +1,13 @@
+{
+  "description": "Reference for block state tracking across layers",
+  "test_cases": [
+    {
+      "name": "4_layers_2_blocks",
+      "num_layers": 8,
+      "num_blocks": 2,
+      "block_size": 4,
+      "expected_boundaries": [2],
+      "note": "With block_size=4, boundary at transformer layer 2 (layer_idx=2, since 2 % (4/2) == 0 and 2 > 0)"
+    }
+  ]
+}
