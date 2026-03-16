@@ -20,6 +20,8 @@ serde_json = "1"
 [dev-dependencies]
 proptest = "1"
 criterion = { version = "0.5", features = ["html_reports"] }
+ratatui = "0.29"
+crossterm = "0.28"
 
 [[bench]]
 name = "attn_res_benchmark"
@@ -36,3 +38,7 @@ path = "examples/compare_residuals.rs"
 [[example]]
 name = "visualize_weights"
 path = "examples/visualize_weights.rs"
+
+[[example]]
+name = "demo_tui"
+path = "examples/demo_tui.rs"

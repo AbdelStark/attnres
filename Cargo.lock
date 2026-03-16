@@ -173,7 +173,9 @@ dependencies = [
  "burn-ndarray",
  "burn-wgpu",
  "criterion",
+ "crossterm",
  "proptest",
+ "ratatui",
  "serde",
  "serde_json",
 ]

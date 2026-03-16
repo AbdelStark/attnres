@@ -52,6 +52,16 @@ impl AttnResConfig {
 }
 
 impl<B: Backend> AttnResTransformer<B> {
+    /// Access the transformer layers for diagnostics and visualization.
+    pub fn layers(&self) -> &[AttnResLayer<B>] {
+        &self.layers
+    }
+
+    /// Embed input token IDs into hidden representations.
+    pub fn embed_tokens(&self, input_ids: Tensor<B, 2, Int>) -> Tensor<B, 3> {
+        self.embedding.forward(input_ids)
+    }
+
     /// Forward pass through the full model.
     ///
     /// # Arguments
