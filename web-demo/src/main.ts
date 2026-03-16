@@ -12,11 +12,14 @@ import { drawStandardResidual, drawComparisonStandard, drawComparisonAttnRes } f
 // ─── State ─────────────────────────────────────────────────────────────
 
 let engine: AttnResEngine | null = null;
-let trainingInterval: ReturnType<typeof setInterval> | null = null;
+let trainingRafId: number | null = null;
+let lastTrainTime = 0;
 let lossHistory: number[] = [];
 let normsHistory: number[][] = [];
 
 const MAX_TRAINING_STEPS = 500;
+const TRAIN_INTERVAL = 80;
+const TRAIN_INTERVAL_REDUCED = 300;
 const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
 // ─── Toast Notifications ───────────────────────────────────────────────
@@ -286,15 +289,58 @@ function hideTrainingCanvas(id: string, emptyId: string) {
   document.getElementById(emptyId)?.classList.remove("hidden");
 }
 
+function trainingLoop(btnStart: HTMLButtonElement, timestamp: number) {
+  if (!trainingRafId || !engine) return;
+
+  const interval = prefersReducedMotion.matches ? TRAIN_INTERVAL_REDUCED : TRAIN_INTERVAL;
+  if (timestamp - lastTrainTime < interval) {
+    trainingRafId = requestAnimationFrame((t) => trainingLoop(btnStart, t));
+    return;
+  }
+  lastTrainTime = timestamp;
+
+  const snapshot = engine.train_step();
+
+  // Update stats
+  document.getElementById("train-step")!.textContent = String(snapshot.step);
+  document.getElementById("train-loss")!.textContent = snapshot.loss.toFixed(4);
+
+  // Record history
+  lossHistory.push(snapshot.loss);
+  normsHistory.push(snapshot.pseudo_query_norms);
+
+  // Draw charts
+  drawLossCurve("canvas-loss", lossHistory);
+  drawHeatmap("canvas-train-heatmap", snapshot.depth_weights);
+  drawNormsChart("canvas-norms", normsHistory);
+
+  // Auto-stop at max steps to prevent unbounded memory growth
+  if (snapshot.step >= MAX_TRAINING_STEPS) {
+    trainingRafId = null;
+    btnStart.textContent = "Training Complete";
+    btnStart.setAttribute("aria-label", "Training complete — reset to restart");
+    showToast(`Training stopped at ${MAX_TRAINING_STEPS} steps`, "info", 3000);
+    return;
+  }
+
+  trainingRafId = requestAnimationFrame((t) => trainingLoop(btnStart, t));
+}
+
+function stopTraining() {
+  if (trainingRafId) {
+    cancelAnimationFrame(trainingRafId);
+    trainingRafId = null;
+  }
+}
+
 function setupTrainingControls() {
   const btnStart = document.getElementById("btn-train-start") as HTMLButtonElement;
   const btnReset = document.getElementById("btn-train-reset") as HTMLButtonElement;
 
   btnStart.addEventListener("click", () => {
-    if (trainingInterval) {
-      // Stop
-      clearInterval(trainingInterval);
-      trainingInterval = null;
+    if (trainingRafId) {
+      // Pause
+      stopTraining();
       btnStart.textContent = "Resume Training";
       btnStart.setAttribute("aria-label", "Resume training simulation");
       return;
@@ -313,42 +359,13 @@ function setupTrainingControls() {
     showTrainingCanvas("canvas-train-heatmap", "heatmap-empty");
     showTrainingCanvas("canvas-norms", "norms-empty");
 
-    // Slower interval for reduced-motion preference
-    const interval = prefersReducedMotion.matches ? 300 : 80;
-
-    trainingInterval = setInterval(() => {
-      if (!engine) return;
-      const snapshot = engine.train_step();
-
-      // Update stats
-      document.getElementById("train-step")!.textContent = String(snapshot.step);
-      document.getElementById("train-loss")!.textContent = snapshot.loss.toFixed(4);
-
-      // Record history
-      lossHistory.push(snapshot.loss);
-      normsHistory.push(snapshot.pseudo_query_norms);
-
-      // Draw charts
-      drawLossCurve("canvas-loss", lossHistory);
-      drawHeatmap("canvas-train-heatmap", snapshot.depth_weights);
-      drawNormsChart("canvas-norms", normsHistory);
-
-      // Auto-stop at max steps to prevent unbounded memory growth
-      if (snapshot.step >= MAX_TRAINING_STEPS) {
-        clearInterval(trainingInterval!);
-        trainingInterval = null;
-        btnStart.textContent = "Training Complete";
-        btnStart.setAttribute("aria-label", "Training complete — reset to restart");
-        showToast(`Training stopped at ${MAX_TRAINING_STEPS} steps`, "info", 3000);
-      }
-    }, interval);
+    // Start rAF loop (synced to browser paint cycle)
+    lastTrainTime = 0;
+    trainingRafId = requestAnimationFrame((t) => trainingLoop(btnStart, t));
   });
 
   btnReset.addEventListener("click", () => {
-    if (trainingInterval) {
-      clearInterval(trainingInterval);
-      trainingInterval = null;
-    }
+    stopTraining();
 
     if (engine) {
       engine.reset_training();
@@ -384,10 +401,7 @@ function clearCanvas(id: string) {
 // ─── Cleanup ──────────────────────────────────────────────────────────
 
 window.addEventListener("beforeunload", () => {
-  if (trainingInterval) {
-    clearInterval(trainingInterval);
-    trainingInterval = null;
-  }
+  stopTraining();
 });
 
 // ─── Entry Point ───────────────────────────────────────────────────────

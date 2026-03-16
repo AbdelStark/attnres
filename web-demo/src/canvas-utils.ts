@@ -14,12 +14,45 @@ export function isDarkMode(): boolean {
 
 // ─── CSS Token Reader ─────────────────────────────────────────────────
 
-/** Read design tokens from CSS custom properties on :root. */
-export function getThemeTokens() {
+export interface ThemeTokens {
+  text: string;
+  textSecondary: string;
+  textMuted: string;
+  bg: string;
+  bgAlt: string;
+  surface: string;
+  border: string;
+  borderSubtle: string;
+  accent: string;
+  accentLight: string;
+  accentDark: string;
+  accentSubtle: string;
+  heatmapCold: string;
+  heatmapHot: string;
+  fontSans: string;
+  fontSerif: string;
+  fontMono: string;
+}
+
+let _cachedTokens: ThemeTokens | null = null;
+let _themeQuery: MediaQueryList | null = null;
+
+function invalidateTokenCache() {
+  _cachedTokens = null;
+  _heatCacheKey = "";
+}
+
+/**
+ * Read design tokens from CSS custom properties on :root.
+ * Cached until the color scheme changes (light ↔ dark).
+ */
+export function getThemeTokens(): ThemeTokens {
+  if (_cachedTokens) return _cachedTokens;
+
   const style = getComputedStyle(document.documentElement);
   const get = (name: string) => style.getPropertyValue(name).trim();
 
-  return {
+  _cachedTokens = {
     text: get("--color-text"),
     textSecondary: get("--color-text-secondary"),
     textMuted: get("--color-text-muted"),
@@ -38,9 +71,15 @@ export function getThemeTokens() {
     fontSerif: get("--font-serif"),
     fontMono: get("--font-mono"),
   };
-}
 
-export type ThemeTokens = ReturnType<typeof getThemeTokens>;
+  // Invalidate when theme changes (once)
+  if (!_themeQuery) {
+    _themeQuery = window.matchMedia("(prefers-color-scheme: dark)");
+    _themeQuery.addEventListener("change", invalidateTokenCache);
+  }
+
+  return _cachedTokens;
+}
 
 // ─── Color Utilities ──────────────────────────────────────────────────
 
@@ -64,12 +103,21 @@ function lerpRGB(
   return `rgb(${r}, ${g}, ${bl})`;
 }
 
+let _heatCold: [number, number, number] = [0, 0, 0];
+let _heatHot: [number, number, number] = [0, 0, 0];
+let _heatCacheKey = "";
+
 /** Map a value in [0, 1] to a heatmap color using design tokens. */
 export function heatColor(t: number, tokens: ThemeTokens): string {
+  // Cache parsed RGB endpoints — only re-parse when tokens change
+  const key = tokens.heatmapCold + tokens.heatmapHot;
+  if (key !== _heatCacheKey) {
+    _heatCold = parseHex(tokens.heatmapCold);
+    _heatHot = parseHex(tokens.heatmapHot);
+    _heatCacheKey = key;
+  }
   t = Math.max(0, Math.min(1, t));
-  const cold = parseHex(tokens.heatmapCold);
-  const hot = parseHex(tokens.heatmapHot);
-  return lerpRGB(cold, hot, t);
+  return lerpRGB(_heatCold, _heatHot, t);
 }
 
 /** Create a semi-transparent version of a hex color. */
