@@ -63,17 +63,17 @@ pub fn phase1_batched<B: Backend>(
             .unsqueeze_dim::<2>(0)
             .unsqueeze_dim::<3>(0)
             .unsqueeze_dim::<4>(0); // [1, 1, 1, D]
-        let logits = (k.clone() * w).sum_dim(3).squeeze::<3>(3); // [N, B, T]
+        let logits = (k.clone() * w).sum_dim(3).squeeze_dim::<3>(3); // [N, B, T]
 
         // Compute softmax statistics for online merge
-        let max_l = logits.clone().max_dim(0).squeeze::<2>(0); // [B, T]
+        let max_l = logits.clone().max_dim(0).squeeze_dim::<2>(0); // [B, T]
         let shifted = logits.clone() - max_l.clone().unsqueeze_dim::<3>(0); // [N, B, T]
         let exp_shifted = shifted.exp(); // [N, B, T]
-        let sum_e = exp_shifted.clone().sum_dim(0).squeeze::<2>(0); // [B, T]
+        let sum_e = exp_shifted.clone().sum_dim(0).squeeze_dim::<2>(0); // [B, T]
 
         // Weighted output (unnormalized)
         let alpha = exp_shifted.unsqueeze_dim::<4>(3); // [N, B, T, 1]
-        let weighted = (v.clone() * alpha).sum_dim(0).squeeze::<3>(0); // [B, T, D]
+        let weighted = (v.clone() * alpha).sum_dim(0).squeeze_dim::<3>(0); // [B, T, D]
 
         outputs.push(weighted);
         max_logits.push(max_l);
@@ -135,7 +135,7 @@ pub fn compute_intra_logit<B: Backend>(op: &AttnResOp<B>, partial: &Tensor<B, 3>
         .val()
         .unsqueeze_dim::<2>(0)
         .unsqueeze_dim::<3>(0); // [1, 1, D]
-    (normed * w).sum_dim(2).squeeze::<2>(2) // [B, T]
+    (normed * w).sum_dim(2).squeeze_dim::<2>(2) // [B, T]
 }
 
 #[cfg(test)]

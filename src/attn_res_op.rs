@@ -71,7 +71,7 @@ impl<B: Backend> AttnResOp<B> {
             .unsqueeze_dim::<2>(0)
             .unsqueeze_dim::<3>(0)
             .unsqueeze_dim::<4>(0); // [1, 1, 1, D]
-        let logits = (k * w).sum_dim(3).squeeze::<3>(3); // [N+1, B, T]
+        let logits = (k * w).sum_dim(3).squeeze_dim::<3>(3); // [N+1, B, T]
 
         // Step 4: Softmax over the depth dimension (dim=0)
         // CRITICAL: softmax over depth, NOT sequence
@@ -83,7 +83,7 @@ impl<B: Backend> AttnResOp<B> {
         // result: sum over dim=0 -> [B, T, D]
         let alpha_expanded = alpha.unsqueeze_dim::<4>(3); // [N+1, B, T, 1]
         let weighted = v * alpha_expanded; // [N+1, B, T, D]
-        weighted.sum_dim(0).squeeze::<3>(0) // [B, T, D]
+        weighted.sum_dim(0).squeeze_dim::<3>(0) // [B, T, D]
     }
 }
 

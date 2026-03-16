@@ -49,8 +49,8 @@ proptest! {
 
         // Compute element-wise min and max across all sources
         let stacked: Tensor<TestBackend, 4> = Tensor::stack(all_sources, 0); // [N+1, B, T, D]
-        let min_vals = stacked.clone().min_dim(0).squeeze::<3>(0); // [B, T, D]
-        let max_vals = stacked.max_dim(0).squeeze::<3>(0); // [B, T, D]
+        let min_vals = stacked.clone().min_dim(0).squeeze_dim::<3>(0); // [B, T, D]
+        let max_vals = stacked.max_dim(0).squeeze_dim::<3>(0); // [B, T, D]
 
         // Output should be >= min and <= max (within tolerance)
         let below_min: f32 = (min_vals - output.clone())
