@@ -20,6 +20,7 @@ pub struct FeedForwardConfig {
 }
 
 impl FeedForwardConfig {
+    /// Initialize the feed-forward MLP with two linear layers and GELU activation.
     pub fn init<B: Backend>(&self, device: &B::Device) -> FeedForward<B> {
         FeedForward {
             linear1: LinearConfig::new(self.d_model, self.d_ff).init(device),

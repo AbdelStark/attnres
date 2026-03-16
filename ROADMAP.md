@@ -2,7 +2,7 @@
 
 ## Current Phase: Alpha (v0.2.0)
 
-Core algorithm, serialization, and two-phase inference implemented. 84 tests passing. Suitable for research and experimentation.
+Core algorithm, serialization, and two-phase inference implemented. 87 tests passing. Suitable for research and experimentation.
 
 ---
 
@@ -14,7 +14,7 @@ Core algorithm, serialization, and two-phase inference implemented. 84 tests pas
 - [x] AttnResLayer: Transformer layer with dual AttnRes (pre-attention + pre-MLP)
 - [x] AttnResTransformer: Full model with embedding, LM head, causal masking
 - [x] MultiHeadAttention: Standard multi-head self-attention
-- [x] FeedForward: SwiGLU-style MLP
+- [x] FeedForward: Two-layer MLP with GELU activation
 - [x] TwoPhase: Two-phase inference optimization (standalone)
 - [x] Config: Validated configuration with builder pattern
 - [x] Zero initialization of pseudo-query vectors
@@ -29,7 +29,7 @@ Core algorithm, serialization, and two-phase inference implemented. 84 tests pas
 - [x] Config save/load (JSON via burn's Config trait)
 - [x] Integrate two-phase inference into main `forward_two_phase` method
 - [x] Layer accessor methods for two-phase inference components
-- [x] 84 tests passing (unit, differential, property-based, integration, doctest)
+- [x] 87 tests passing (unit, differential, property-based, integration, doctest)
 - [ ] Pre-trained weight loading from PyTorch checkpoints
 - [ ] Model export utilities
 
