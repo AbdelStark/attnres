@@ -83,13 +83,13 @@ cargo bench                        # Benchmarks
 
 ## Current Status
 
-**Alpha** (v0.1.0). Core algorithm implemented and tested with 57 passing tests (unit, differential, property-based, integration). Built on burn 0.20. Suitable for research and experimentation. Not yet suitable for production training at scale.
+**Alpha** (v0.2.0). Core algorithm implemented and tested with 84 passing tests (unit, differential, property-based, integration, doctest). Built on burn 0.20. Serialization (NamedMpk, binary, compact/half-precision) and two-phase inference integrated. Suitable for research and experimentation. Not yet suitable for production training at scale.
 
 Known limitations:
-- No weight serialization/loading (safetensors support planned)
-- Two-phase inference optimization is implemented but not integrated into the main forward pass
+- No PyTorch checkpoint import (safetensors format)
 - NdArray backend only tested; GPU backends (wgpu, CUDA, Metal) untested
 - No distributed training support
+- No KV-cache for autoregressive generation
 
 See [ROADMAP.md](ROADMAP.md) for planned features and progress.
 

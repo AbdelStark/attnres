@@ -29,7 +29,7 @@ src/
 ├── serialization.rs    # Model weight save/load (NamedMpk, binary, compact formats)
 ├── two_phase.rs        # Two-phase inference primitives (phase1_batched, online_softmax_merge)
 ├── attention.rs        # Multi-head self-attention
-├── feed_forward.rs     # SwiGLU-style MLP
+├── feed_forward.rs     # Two-layer MLP with GELU activation
 └── utils.rs            # Causal mask generation helpers
 
 tests/
@@ -55,7 +55,7 @@ fixtures/                # Reference outputs from PyTorch
 
 ```bash
 cargo build                        # Build the project
-cargo test --all-features          # Run all 66 tests
+cargo test --all-features          # Run all 84 tests
 cargo test test_name               # Run specific test
 cargo clippy -- -D warnings        # Lint (warnings = errors)
 cargo fmt                          # Format code

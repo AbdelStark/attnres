@@ -102,4 +102,68 @@ proptest! {
         let output = op.forward(&blocks, &partial);
         prop_assert_eq!(output.dims(), [batch, seq_len, d_model]);
     }
+
+    /// Zero-init AttnRes with identical sources should return that source.
+    /// This is the identity property: if all inputs are the same, the output
+    /// must equal that input regardless of num_blocks.
+    #[test]
+    fn identical_sources_produce_identical_output(
+        num_blocks in 1_usize..5,
+        batch in 1_usize..3,
+        seq_len in 1_usize..5,
+    ) {
+        let d_model = 16;
+        let device = Default::default();
+        let config = AttnResConfig::new(d_model, 12, num_blocks);
+        let op = config.init_op::<TestBackend>(&device);
+
+        // All sources are the same tensor
+        let source = Tensor::random(
+            [batch, seq_len, d_model],
+            Distribution::Uniform(-1.0, 1.0),
+            &device,
+        );
+        let blocks: Vec<_> = (0..num_blocks).map(|_| source.clone()).collect();
+
+        let output = op.forward(&blocks, &source);
+        let diff: f32 = (output - source).abs().max().into_scalar();
+        prop_assert!(
+            diff < 1e-3,
+            "Identical sources should produce that source, diff={diff}"
+        );
+    }
+
+    /// AttnRes output should be finite (no NaN/Inf) for any reasonable input.
+    #[test]
+    fn output_is_always_finite(
+        num_blocks in 1_usize..4,
+        batch in 1_usize..3,
+        seq_len in 1_usize..5,
+    ) {
+        let d_model = 16;
+        let device = Default::default();
+        let config = AttnResConfig::new(d_model, 12, num_blocks);
+        let op = config.init_op::<TestBackend>(&device);
+
+        let blocks: Vec<_> = (0..num_blocks)
+            .map(|_| {
+                Tensor::random(
+                    [batch, seq_len, d_model],
+                    Distribution::Uniform(-10.0, 10.0),
+                    &device,
+                )
+            })
+            .collect();
+        let partial = Tensor::random(
+            [batch, seq_len, d_model],
+            Distribution::Uniform(-10.0, 10.0),
+            &device,
+        );
+
+        let output = op.forward(&blocks, &partial);
+        let has_nan: bool = output.clone().is_nan().any().into_scalar();
+        let has_inf: bool = output.is_inf().any().into_scalar();
+        prop_assert!(!has_nan, "Output contains NaN");
+        prop_assert!(!has_inf, "Output contains Inf");
+    }
 }

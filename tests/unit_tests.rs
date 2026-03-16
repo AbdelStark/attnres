@@ -441,3 +441,252 @@ fn test_model_init_validates_config() {
     // This should succeed
     let _model: AttnResTransformer<TestBackend> = config.init_model(&device);
 }
+
+// ========================
+// Config Validation Edge Cases
+// ========================
+
+#[test]
+#[should_panic(expected = "d_model must be positive")]
+fn test_validate_zero_d_model() {
+    AttnResConfig::new(0, 4, 2).validate();
+}
+
+#[test]
+#[should_panic(expected = "num_layers must be positive")]
+fn test_validate_zero_num_layers() {
+    AttnResConfig::new(32, 0, 0).validate();
+}
+
+#[test]
+#[should_panic(expected = "vocab_size must be positive")]
+fn test_validate_zero_vocab_size() {
+    AttnResConfig::new(32, 4, 2).with_vocab_size(0).validate();
+}
+
+#[test]
+#[should_panic(expected = "dropout must be in [0.0, 1.0]")]
+fn test_validate_negative_dropout() {
+    AttnResConfig::new(32, 4, 2).with_dropout(-0.1).validate();
+}
+
+#[test]
+#[should_panic(expected = "dropout must be in [0.0, 1.0]")]
+fn test_validate_dropout_over_one() {
+    AttnResConfig::new(32, 4, 2).with_dropout(1.5).validate();
+}
+
+#[test]
+#[should_panic(expected = "rms_norm_eps must be positive")]
+fn test_validate_zero_eps() {
+    AttnResConfig::new(32, 4, 2)
+        .with_rms_norm_eps(0.0)
+        .validate();
+}
+
+#[test]
+#[should_panic(expected = "must be even")]
+fn test_validate_odd_layers() {
+    AttnResConfig::new(32, 3, 1).validate();
+}
+
+#[test]
+#[should_panic(expected = "divisible by num_blocks")]
+fn test_validate_layers_not_divisible_by_blocks() {
+    AttnResConfig::new(32, 6, 4).validate();
+}
+
+#[test]
+#[should_panic(expected = "divisible by num_heads")]
+fn test_validate_d_model_not_divisible_by_heads() {
+    AttnResConfig::new(33, 4, 2).with_num_heads(8).validate();
+}
+
+// ========================
+// Block Boundary Matrix Tests
+// ========================
+
+#[test]
+fn test_block_boundary_matrix() {
+    // Systematically test block boundary detection across configurations.
+    let device = Default::default();
+
+    // Config: 8 sublayers, 4 blocks -> block_size=2 -> half_block=1
+    // Boundaries at layer_idx > 0 && layer_idx % 1 == 0 → layers 1, 2, 3
+    let config = AttnResConfig::new(32, 8, 4).with_num_heads(4);
+    let layer0 = config.init_layer::<TestBackend>(0, &device);
+    let layer1 = config.init_layer::<TestBackend>(1, &device);
+    let layer2 = config.init_layer::<TestBackend>(2, &device);
+    let layer3 = config.init_layer::<TestBackend>(3, &device);
+    assert!(
+        !layer0.is_at_boundary(),
+        "Layer 0 should never be a boundary"
+    );
+    assert!(
+        layer1.is_at_boundary(),
+        "Layer 1 should be a boundary (8 sublayers, 4 blocks)"
+    );
+    assert!(layer2.is_at_boundary(), "Layer 2 should be a boundary");
+    assert!(layer3.is_at_boundary(), "Layer 3 should be a boundary");
+
+    // Config: 12 sublayers, 2 blocks -> block_size=6 -> half_block=3
+    // Boundaries at layer_idx > 0 && layer_idx % 3 == 0 → layer 3
+    let config2 = AttnResConfig::new(32, 12, 2).with_num_heads(4);
+    let l0 = config2.init_layer::<TestBackend>(0, &device);
+    let l1 = config2.init_layer::<TestBackend>(1, &device);
+    let l2 = config2.init_layer::<TestBackend>(2, &device);
+    let l3 = config2.init_layer::<TestBackend>(3, &device);
+    let l4 = config2.init_layer::<TestBackend>(4, &device);
+    let l5 = config2.init_layer::<TestBackend>(5, &device);
+    assert!(!l0.is_at_boundary());
+    assert!(!l1.is_at_boundary());
+    assert!(!l2.is_at_boundary());
+    assert!(
+        l3.is_at_boundary(),
+        "Layer 3 should be boundary (12 sublayers, 2 blocks)"
+    );
+    assert!(!l4.is_at_boundary());
+    assert!(!l5.is_at_boundary());
+
+    // Config: Full AttnRes (4 sublayers, 4 blocks) -> block_size=1 -> half_block=0
+    // Special case: every layer after first is boundary
+    let config3 = AttnResConfig::new(32, 4, 4).with_num_heads(4);
+    let fl0 = config3.init_layer::<TestBackend>(0, &device);
+    let fl1 = config3.init_layer::<TestBackend>(1, &device);
+    assert!(!fl0.is_at_boundary());
+    assert!(
+        fl1.is_at_boundary(),
+        "Full AttnRes: every layer after first is boundary"
+    );
+}
+
+#[test]
+fn test_block_accumulation_count() {
+    // Verify the exact number of blocks accumulated after a full forward pass.
+    let device = Default::default();
+    // 8 sublayers, 2 blocks -> block_size=4 -> half_block=2
+    // 4 transformer layers (indices 0..3)
+    // Boundaries at layers where idx > 0 && idx % 2 == 0 → layer 2
+    let config = AttnResConfig::new(32, 8, 2).with_num_heads(4);
+    let layers: Vec<_> = (0..4)
+        .map(|i| config.init_layer::<TestBackend>(i, &device))
+        .collect();
+
+    let emb = Tensor::random([1, 4, 32], Distribution::Normal(0.0, 1.0), &device);
+    let mut state = BlockState::new(emb);
+
+    // Track block counts after each layer
+    let mut counts = vec![];
+    for layer in &layers {
+        state = layer.forward(state, None);
+        counts.push(state.num_blocks());
+    }
+
+    // Layer 0: no boundary → 1 block (initial embedding)
+    // Layer 1: idx=1, half_block=2, 1%2≠0 → no boundary → 1 block
+    // Layer 2: idx=2, half_block=2, 2%2==0 and 2>0 → boundary → 2 blocks
+    // Layer 3: idx=3, half_block=2, 3%2≠0 → no boundary → 2 blocks
+    assert_eq!(
+        counts,
+        vec![1, 1, 2, 2],
+        "Block accumulation mismatch: {counts:?}"
+    );
+}
+
+// ========================
+// Numerical Stability Tests
+// ========================
+
+#[test]
+fn test_attnres_large_magnitude_inputs() {
+    // Verify AttnRes handles large-magnitude inputs without NaN.
+    let device = Default::default();
+    let config = AttnResConfig::new(16, 4, 2);
+    let op = config.init_op::<TestBackend>(&device);
+
+    let large = Tensor::<TestBackend, 3>::ones([1, 4, 16], &device) * 1e6;
+    let partial = Tensor::<TestBackend, 3>::ones([1, 4, 16], &device) * 1e6;
+
+    let output = op.forward(&[large], &partial);
+    let has_nan = output.clone().is_nan().any().into_scalar();
+    assert!(!has_nan, "Output should not contain NaN with large inputs");
+
+    let has_inf = output.clone().is_inf().any().into_scalar();
+    assert!(!has_inf, "Output should not contain Inf with large inputs");
+}
+
+#[test]
+fn test_attnres_near_zero_inputs() {
+    // Verify AttnRes handles near-zero inputs without NaN (eps should save us).
+    let device = Default::default();
+    let config = AttnResConfig::new(16, 4, 2);
+    let op = config.init_op::<TestBackend>(&device);
+
+    let tiny = Tensor::<TestBackend, 3>::ones([1, 4, 16], &device) * 1e-10;
+    let partial = Tensor::<TestBackend, 3>::ones([1, 4, 16], &device) * 1e-10;
+
+    let output = op.forward(&[tiny], &partial);
+    let has_nan = output.clone().is_nan().any().into_scalar();
+    assert!(
+        !has_nan,
+        "Output should not contain NaN with near-zero inputs"
+    );
+}
+
+#[test]
+fn test_rmsnorm_zero_input() {
+    // RMSNorm(0) should not produce NaN (eps prevents division by zero).
+    let device = Default::default();
+    let norm = RmsNormConfig::new(8).init::<TestBackend>(&device);
+
+    let zero = Tensor::<TestBackend, 3>::zeros([1, 4, 8], &device);
+    let out = norm.forward(zero);
+    let has_nan = out.is_nan().any().into_scalar();
+    assert!(!has_nan, "RMSNorm of zero should not produce NaN");
+}
+
+// ========================
+// Two-phase Deeper Stress Test
+// ========================
+
+#[test]
+fn test_two_phase_deep_model() {
+    // Exercise two-phase with a deeper model (24 sublayers, 4 blocks).
+    let device = Default::default();
+    let config = AttnResConfig::new(32, 24, 4)
+        .with_num_heads(4)
+        .with_vocab_size(50);
+
+    let model: AttnResTransformer<TestBackend> = config.init_model(&device);
+    let input = Tensor::<TestBackend, 2, Int>::zeros([1, 8], &device);
+
+    let standard = model.forward(input.clone(), None);
+    let two_phase = model.forward_two_phase(input, None);
+
+    let diff: f32 = (standard - two_phase).abs().max().into_scalar();
+    assert!(
+        diff < 1e-2,
+        "Two-phase should match standard for deep model (24 sublayers, 4 blocks), diff={diff}"
+    );
+}
+
+#[test]
+fn test_two_phase_full_attnres() {
+    // Two-phase with Full AttnRes (num_blocks = num_layers).
+    let device = Default::default();
+    let config = AttnResConfig::new(32, 8, 8)
+        .with_num_heads(4)
+        .with_vocab_size(50);
+
+    let model: AttnResTransformer<TestBackend> = config.init_model(&device);
+    let input = Tensor::<TestBackend, 2, Int>::zeros([1, 8], &device);
+
+    let standard = model.forward(input.clone(), None);
+    let two_phase = model.forward_two_phase(input, None);
+
+    let diff: f32 = (standard - two_phase).abs().max().into_scalar();
+    assert!(
+        diff < 1e-2,
+        "Two-phase should match standard for Full AttnRes, diff={diff}"
+    );
+}

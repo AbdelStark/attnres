@@ -1,8 +1,8 @@
 # attnres-rs Roadmap
 
-## Current Phase: Alpha (v0.1.0)
+## Current Phase: Alpha (v0.2.0)
 
-Core algorithm implemented and tested. Suitable for research and experimentation.
+Core algorithm, serialization, and two-phase inference implemented. 84 tests passing. Suitable for research and experimentation.
 
 ---
 
@@ -29,7 +29,7 @@ Core algorithm implemented and tested. Suitable for research and experimentation
 - [x] Config save/load (JSON via burn's Config trait)
 - [x] Integrate two-phase inference into main `forward_two_phase` method
 - [x] Layer accessor methods for two-phase inference components
-- [x] 66 tests passing (unit, differential, property-based, integration, doctest)
+- [x] 84 tests passing (unit, differential, property-based, integration, doctest)
 - [ ] Pre-trained weight loading from PyTorch checkpoints
 - [ ] Model export utilities
 
