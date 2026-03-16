@@ -16,6 +16,9 @@ let trainingInterval: ReturnType<typeof setInterval> | null = null;
 let lossHistory: number[] = [];
 let normsHistory: number[][] = [];
 
+const MAX_TRAINING_STEPS = 500;
+const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+
 // ─── Toast Notifications ───────────────────────────────────────────────
 
 function showToast(message: string, type: "info" | "error" | "success" = "info", duration = 4000) {
@@ -55,13 +58,22 @@ function setupNavigation() {
     toggle.setAttribute("aria-expanded", String(open));
   });
 
+  // Close mobile nav helper
+  const closeNav = () => {
+    links.classList.remove("open");
+    toggle.setAttribute("aria-expanded", "false");
+  };
+
   // Close mobile nav on link click
-  navAnchors.forEach((a) =>
-    a.addEventListener("click", () => {
-      links.classList.remove("open");
-      toggle.setAttribute("aria-expanded", "false");
-    })
-  );
+  navAnchors.forEach((a) => a.addEventListener("click", closeNav));
+
+  // Close mobile nav on Escape key
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && links.classList.contains("open")) {
+      closeNav();
+      toggle.focus();
+    }
+  });
 
   // Active nav link via IntersectionObserver
   const sections = document.querySelectorAll<HTMLElement>("section[id]");
@@ -167,8 +179,8 @@ function setupDemoControls() {
         vocab_size: 256,
       });
 
-      document.getElementById("query-controls")!.style.display = "block";
-      document.getElementById("demo-results")!.style.display = "grid";
+      document.getElementById("query-controls")!.classList.remove("hidden");
+      document.getElementById("demo-results")!.classList.remove("hidden");
       document.getElementById("btn-train-start")!.removeAttribute("disabled");
       document.getElementById("btn-train-reset")!.removeAttribute("disabled");
 
@@ -200,7 +212,7 @@ function showModelInfo() {
   const info = engine.model_info();
   const el = document.getElementById("model-info-display")!;
 
-  const fields = [
+  const fields: [string, string | number][] = [
     ["d_model", info.d_model],
     ["sublayers", info.num_layers],
     ["transformer layers", info.num_transformer_layers],
@@ -209,16 +221,23 @@ function showModelInfo() {
     ["heads", info.num_heads],
     ["d_ff", info.d_ff],
     ["AttnRes ops", info.total_attnres_ops],
-    ["total params", info.total_params.toLocaleString()],
+    ["total params", info.total_params?.toLocaleString() ?? "—"],
     ["variant", info.is_full_attnres ? "Full" : "Block"],
   ];
 
-  el.innerHTML = `<div class="model-info-grid">${fields
-    .map(
-      ([k, v]) =>
-        `<span class="model-info-key">${k}</span><span class="model-info-val">${v}</span>`
-    )
-    .join("")}</div>`;
+  const grid = document.createElement("div");
+  grid.className = "model-info-grid";
+  for (const [k, v] of fields) {
+    const key = document.createElement("span");
+    key.className = "model-info-key";
+    key.textContent = k;
+    const val = document.createElement("span");
+    val.className = "model-info-val";
+    val.textContent = String(v);
+    grid.appendChild(key);
+    grid.appendChild(val);
+  }
+  el.replaceChildren(grid);
 }
 
 function updateDemo() {
@@ -258,17 +277,13 @@ function updateDemo() {
 // ─── Training Panel ────────────────────────────────────────────────────
 
 function showTrainingCanvas(id: string, emptyId: string) {
-  const canvas = document.getElementById(id) as HTMLCanvasElement;
-  const empty = document.getElementById(emptyId);
-  if (canvas) canvas.style.display = "block";
-  if (empty) empty.style.display = "none";
+  document.getElementById(id)?.classList.remove("hidden");
+  document.getElementById(emptyId)?.classList.add("hidden");
 }
 
 function hideTrainingCanvas(id: string, emptyId: string) {
-  const canvas = document.getElementById(id) as HTMLCanvasElement;
-  const empty = document.getElementById(emptyId);
-  if (canvas) canvas.style.display = "none";
-  if (empty) empty.style.display = "flex";
+  document.getElementById(id)?.classList.add("hidden");
+  document.getElementById(emptyId)?.classList.remove("hidden");
 }
 
 function setupTrainingControls() {
@@ -298,6 +313,9 @@ function setupTrainingControls() {
     showTrainingCanvas("canvas-train-heatmap", "heatmap-empty");
     showTrainingCanvas("canvas-norms", "norms-empty");
 
+    // Slower interval for reduced-motion preference
+    const interval = prefersReducedMotion.matches ? 300 : 80;
+
     trainingInterval = setInterval(() => {
       if (!engine) return;
       const snapshot = engine.train_step();
@@ -314,7 +332,16 @@ function setupTrainingControls() {
       drawLossCurve("canvas-loss", lossHistory);
       drawHeatmap("canvas-train-heatmap", snapshot.depth_weights);
       drawNormsChart("canvas-norms", normsHistory);
-    }, 80);
+
+      // Auto-stop at max steps to prevent unbounded memory growth
+      if (snapshot.step >= MAX_TRAINING_STEPS) {
+        clearInterval(trainingInterval!);
+        trainingInterval = null;
+        btnStart.textContent = "Training Complete";
+        btnStart.setAttribute("aria-label", "Training complete — reset to restart");
+        showToast(`Training stopped at ${MAX_TRAINING_STEPS} steps`, "info", 3000);
+      }
+    }, interval);
   });
 
   btnReset.addEventListener("click", () => {
@@ -353,6 +380,15 @@ function clearCanvas(id: string) {
   const ctx = canvas.getContext("2d")!;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
+
+// ─── Cleanup ──────────────────────────────────────────────────────────
+
+window.addEventListener("beforeunload", () => {
+  if (trainingInterval) {
+    clearInterval(trainingInterval);
+    trainingInterval = null;
+  }
+});
 
 // ─── Entry Point ───────────────────────────────────────────────────────
 

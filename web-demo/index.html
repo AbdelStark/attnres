@@ -30,13 +30,13 @@
           <line x1="3" y1="18" x2="21" y2="18" />
         </svg>
       </button>
-      <div class="nav-links" id="nav-links" role="list">
-        <a href="#problem" role="listitem">Problem</a>
-        <a href="#algorithm" role="listitem">Algorithm</a>
-        <a href="#demo" role="listitem">Live Demo</a>
-        <a href="#training" role="listitem">Training</a>
-        <a href="#comparison" role="listitem">Comparison</a>
-        <a href="https://github.com/AbdelStark/attnres" target="_blank" rel="noopener" role="listitem">GitHub</a>
+      <div class="nav-links" id="nav-links">
+        <a href="#problem">Problem</a>
+        <a href="#algorithm">Algorithm</a>
+        <a href="#demo">Live Demo</a>
+        <a href="#training">Training</a>
+        <a href="#comparison">Comparison</a>
+        <a href="https://github.com/AbdelStark/attnres" target="_blank" rel="noopener">GitHub</a>
       </div>
     </div>
   </nav>
@@ -124,7 +124,7 @@
               Collect all completed block sums <strong>b<sub>0</sub>, &hellip;, b<sub>n-1</sub></strong>
               plus the current partial block into a value matrix.
             </p>
-            <div class="equation" role="math">
+            <div class="equation" role="math" aria-label="V equals stack of b0 through bn partial, in R to the (N+1) times D">
               V = [b<sub>0</sub>; b<sub>1</sub>; &hellip;; b<sub>n</sub><sup>(partial)</sup>] &ensp;&isin;&ensp; &Ropf;<sup>(N+1) &times; D</sup>
             </div>
           </div>
@@ -139,7 +139,7 @@
               Without this, deeper blocks (which accumulate more layer outputs)
               would receive disproportionate weight.
             </p>
-            <div class="equation" role="math">
+            <div class="equation" role="math" aria-label="K equals RMSNorm of V equals V divided by square root of mean V squared, times gamma">
               K = RMSNorm(V) = (V / &radic;mean(V&sup2;)) &middot; &gamma;
             </div>
           </div>
@@ -154,7 +154,7 @@
               scores each block. Crucially, w is <strong>initialized to zero</strong> &mdash;
               ensuring the model starts as a standard residual and smoothly transitions.
             </p>
-            <div class="equation" role="math">
+            <div class="equation" role="math" aria-label="logits i equals K i dot w l, for all i in 0 through N">
               logits<sub>i</sub> = K<sub>i</sub> &middot; w<sub>l</sub> &ensp;&ensp; &forall; i &isin; {0, &hellip;, N}
             </div>
           </div>
@@ -168,7 +168,7 @@
               The softmax is taken <strong>over the block/depth dimension</strong>, not the
               sequence dimension. This is attention over <em>layers</em>, not over <em>tokens</em>.
             </p>
-            <div class="equation" role="math">
+            <div class="equation" role="math" aria-label="alpha i equals softmax of logits i equals exp logits i divided by sum of exp logits j">
               &alpha;<sub>i</sub> = softmax(logits)<sub>i</sub> = exp(logits<sub>i</sub>) / &sum;<sub>j</sub> exp(logits<sub>j</sub>)
             </div>
           </div>
@@ -182,7 +182,7 @@
               The output is a learned convex combination of all block representations.
               Each layer can choose exactly how much information to draw from each depth.
             </p>
-            <div class="equation" role="math">
+            <div class="equation" role="math" aria-label="h equals sum of alpha i times V i">
               h = &sum;<sub>i</sub> &alpha;<sub>i</sub> &middot; V<sub>i</sub>
             </div>
           </div>
@@ -250,7 +250,7 @@
             <button class="btn btn-primary" id="btn-init-model">Initialize Model</button>
           </div>
 
-          <div class="control-group" id="query-controls" style="display:none">
+          <div class="control-group hidden" id="query-controls">
             <label for="query-magnitude">Pseudo-Query Magnitude</label>
             <p class="control-hint">
               Drag the slider to simulate w<sub>l</sub> evolving away from zero during training.
@@ -265,7 +265,7 @@
           </div>
         </div>
 
-        <div class="demo-results" id="demo-results" style="display:none">
+        <div class="demo-results hidden" id="demo-results">
           <div class="result-card">
             <div class="result-card-header">Model Info</div>
             <div class="result-card-body" id="model-info-display"></div>
@@ -326,14 +326,14 @@
             <div class="result-card-header">Loss Curve</div>
             <div class="result-card-body">
               <div class="canvas-empty-state" id="loss-empty">Initialize a model and start training to see the loss curve</div>
-              <canvas id="canvas-loss" width="800" height="200" style="display:none" aria-label="Training loss curve over steps"></canvas>
+              <canvas id="canvas-loss" width="800" height="200" class="hidden" aria-label="Training loss curve over steps"></canvas>
             </div>
           </div>
           <div class="result-card result-card-wide">
             <div class="result-card-header">Depth Attention Heatmap (evolving)</div>
             <div class="result-card-body">
               <div class="canvas-empty-state" id="heatmap-empty">Depth attention patterns will appear here during training</div>
-              <canvas id="canvas-train-heatmap" width="800" height="300" style="display:none" aria-label="Evolving depth attention heatmap during training"></canvas>
+              <canvas id="canvas-train-heatmap" width="800" height="300" class="hidden" aria-label="Evolving depth attention heatmap during training"></canvas>
             </div>
             <div class="result-card-footer">
               Watch how later layers develop stronger selectivity over depth.
@@ -344,7 +344,7 @@
             <div class="result-card-header">Pseudo-Query Norms ||w<sub>l</sub>||</div>
             <div class="result-card-body">
               <div class="canvas-empty-state" id="norms-empty">Pseudo-query norm evolution will appear here during training</div>
-              <canvas id="canvas-norms" width="800" height="200" style="display:none" aria-label="Multi-line chart of pseudo-query norm evolution per sublayer"></canvas>
+              <canvas id="canvas-norms" width="800" height="200" class="hidden" aria-label="Multi-line chart of pseudo-query norm evolution per sublayer"></canvas>
             </div>
             <div class="result-card-footer">
               The magnitude of each pseudo-query grows from zero during training.
@@ -365,7 +365,7 @@
       <div class="comparison-grid">
         <div class="comparison-card">
           <h3>Standard Residual</h3>
-          <div class="equation" role="math">h = h<sub>l</sub> + F(h<sub>l</sub>)</div>
+          <div class="equation" role="math" aria-label="h equals h sub l plus F of h sub l">h = h<sub>l</sub> + F(h<sub>l</sub>)</div>
           <canvas id="canvas-cmp-standard" width="300" height="200" aria-label="Bar chart showing uniform 0.25 weights for standard residual"></canvas>
           <ul>
             <li>Fixed weight = 1 per layer</li>
@@ -376,7 +376,7 @@
         </div>
         <div class="comparison-card comparison-card-highlight">
           <h3>Attention Residual</h3>
-          <div class="equation" role="math">h = &sum; &alpha;<sub>i</sub> &middot; b<sub>i</sub></div>
+          <div class="equation" role="math" aria-label="h equals sum of alpha i times b i">h = &sum; &alpha;<sub>i</sub> &middot; b<sub>i</sub></div>
           <canvas id="canvas-cmp-attnres" width="300" height="200" aria-label="Bar chart showing learned non-uniform weights for attention residual"></canvas>
           <ul>
             <li>Learned weights via softmax</li>
