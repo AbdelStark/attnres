@@ -45,3 +45,6 @@ web-demo/node_modules/
 web-demo/dist/
 web-demo/crate/target/
 web-demo/crate/pkg/
+
+.claude/tsc-cache/
+.claude/cache/
