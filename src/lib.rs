@@ -9,7 +9,7 @@
 //!
 //! ## Quick Start
 //!
-//! ```rust,no_run
+//! ```rust
 //! use attnres_rs::{AttnResConfig, AttnResTransformer};
 //! use burn::prelude::*;
 //! use burn::backend::NdArray;
@@ -21,10 +21,10 @@
 //!     .with_num_heads(4)
 //!     .with_vocab_size(1000);
 //!
-//! let model = config.init_model::<B>(&device);
+//! let model: AttnResTransformer<B> = config.init_model(&device);
 //! let input_ids = Tensor::<B, 2, Int>::zeros([1, 16], &device);
 //! let logits = model.forward(input_ids, None);
-//! // logits shape: [1, 16, 1000]
+//! assert_eq!(logits.dims(), [1, 16, 1000]);
 //! ```
 
 pub mod attention;

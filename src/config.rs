@@ -1,36 +1,83 @@
 /// Configuration for Attention Residuals.
 ///
+/// `num_layers` counts *sublayers* — each transformer layer has 2 sublayers
+/// (attention + MLP), so `num_layers=8` creates 4 transformer layers.
+///
 /// Paper reference: Section 3, Block Attention Residuals.
 use burn::config::Config;
 
 #[derive(Config, Debug)]
 pub struct AttnResConfig {
-    /// Hidden dimension (d_model).
+    /// Hidden dimension (d_model). Must be positive and divisible by `num_heads`.
     pub d_model: usize,
     /// Total number of sublayers (L). Each transformer layer has 2 sublayers (attn + MLP).
+    /// Must be positive, even, and divisible by `num_blocks`.
     pub num_layers: usize,
-    /// Number of blocks for Block AttnRes. Set to num_layers for Full AttnRes.
+    /// Number of blocks for Block AttnRes. Set to `num_layers` for Full AttnRes.
+    /// Must be positive and divide `num_layers` evenly.
     pub num_blocks: usize,
     /// Number of attention heads for multi-head attention.
+    /// Must divide `d_model` evenly.
     #[config(default = 8)]
     pub num_heads: usize,
     /// Intermediate dimension for the MLP feed-forward layer.
-    /// Defaults to 4 * d_model.
+    /// Defaults to 4 * d_model when set to 0.
     #[config(default = 0)]
     pub d_ff: usize,
     /// Vocabulary size for embedding and LM head.
     #[config(default = 32000)]
     pub vocab_size: usize,
-    /// Epsilon for RMSNorm.
+    /// Epsilon for RMSNorm numerical stability.
     #[config(default = 1e-6)]
     pub rms_norm_eps: f64,
-    /// Dropout rate.
+    /// Dropout rate (0.0 = no dropout).
     #[config(default = 0.0)]
     pub dropout: f64,
 }
 
 impl AttnResConfig {
+    /// Validate that this configuration is internally consistent.
+    ///
+    /// # Panics
+    /// Panics with a descriptive message if any constraint is violated.
+    pub fn validate(&self) {
+        assert!(self.d_model > 0, "d_model must be positive, got 0");
+        assert!(self.num_layers > 0, "num_layers must be positive, got 0");
+        assert!(self.num_blocks > 0, "num_blocks must be positive, got 0");
+        assert!(
+            self.num_layers.is_multiple_of(2),
+            "num_layers ({}) must be even (each transformer layer = 2 sublayers: attn + MLP)",
+            self.num_layers
+        );
+        assert!(
+            self.num_layers.is_multiple_of(self.num_blocks),
+            "num_layers ({}) must be divisible by num_blocks ({})",
+            self.num_layers,
+            self.num_blocks
+        );
+        assert!(
+            self.d_model.is_multiple_of(self.num_heads),
+            "d_model ({}) must be divisible by num_heads ({})",
+            self.d_model,
+            self.num_heads
+        );
+        assert!(self.vocab_size > 0, "vocab_size must be positive, got 0");
+        assert!(
+            self.rms_norm_eps > 0.0,
+            "rms_norm_eps must be positive, got {}",
+            self.rms_norm_eps
+        );
+        assert!(
+            (0.0..=1.0).contains(&self.dropout),
+            "dropout must be in [0.0, 1.0], got {}",
+            self.dropout
+        );
+    }
+
     /// Sublayers per block (S = L / N).
+    ///
+    /// # Panics
+    /// Panics if `num_blocks` is zero or doesn't divide `num_layers`.
     pub fn block_size(&self) -> usize {
         assert!(self.num_blocks > 0, "num_blocks must be positive");
         assert!(
@@ -48,12 +95,18 @@ impl AttnResConfig {
     }
 
     /// Effective feed-forward intermediate dimension.
+    /// Returns `d_ff` if explicitly set, otherwise `4 * d_model`.
     pub fn effective_d_ff(&self) -> usize {
         if self.d_ff == 0 {
             4 * self.d_model
         } else {
             self.d_ff
         }
+    }
+
+    /// Number of transformer layers (each transformer layer = 2 sublayers).
+    pub fn num_transformer_layers(&self) -> usize {
+        self.num_layers / 2
     }
 }
 
@@ -96,5 +149,39 @@ mod tests {
     fn test_indivisible_panics() {
         let config = AttnResConfig::new(64, 12, 5);
         config.block_size();
+    }
+
+    #[test]
+    fn test_validate_good_config() {
+        let config = AttnResConfig::new(64, 12, 4).with_num_heads(8);
+        config.validate(); // should not panic
+    }
+
+    #[test]
+    #[should_panic(expected = "must be even")]
+    fn test_validate_odd_num_layers() {
+        let config = AttnResConfig::new(64, 11, 1);
+        config.validate();
+    }
+
+    #[test]
+    #[should_panic(expected = "d_model (64) must be divisible by num_heads (5)")]
+    fn test_validate_bad_num_heads() {
+        let config = AttnResConfig::new(64, 12, 4).with_num_heads(5);
+        config.validate();
+    }
+
+    #[test]
+    fn test_num_transformer_layers() {
+        let config = AttnResConfig::new(64, 12, 4);
+        assert_eq!(config.num_transformer_layers(), 6);
+    }
+
+    #[test]
+    fn test_full_attnres_block_size_one() {
+        // Full AttnRes: each sublayer is its own block
+        let config = AttnResConfig::new(64, 12, 12);
+        assert_eq!(config.block_size(), 1);
+        assert!(config.is_full());
     }
 }

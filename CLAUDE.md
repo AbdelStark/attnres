@@ -15,12 +15,14 @@ attnres-rs: First Rust implementation of Attention Residuals (MoonshotAI/Kimi pa
 </stack>
 
 <status>
-PROJECT PHASE: Pre-implementation (specification complete, no source code yet).
-All planning documents are finalized. Implementation follows the phased plan in implementation_plan.md.
+PROJECT PHASE: Alpha (v0.1.0 — core algorithm implemented, tests passing).
+All source modules implemented. 52 tests passing (unit, differential, property-based, integration).
+CI configured (test, clippy, fmt, build-examples). Examples and benchmarks functional.
+Known gaps: no safetensors serialization, two-phase inference not integrated into main forward path, GPU backends untested.
 </status>
 
 <structure>
-Planned directory layout (to be created during implementation):
+Current directory layout:
 
 ```
 attnres-rs/

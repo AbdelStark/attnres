@@ -6,7 +6,7 @@
 //!
 //! Run with: `cargo run --example visualize_weights`
 
-use attnres_rs::{AttnResConfig, AttnResOp, RmsNormConfig};
+use attnres_rs::{AttnResConfig, AttnResOp};
 use burn::backend::NdArray;
 use burn::prelude::*;
 use burn::tensor::activation::softmax;
@@ -25,9 +25,8 @@ fn extract_weights(op: &AttnResOp<B>, blocks: &[Tensor<B, 3>], partial: &Tensor<
 
     let v = Tensor::stack(sources, 0); // [N+1, B, T, D]
 
-    // Apply RMSNorm to get keys
-    let norm = RmsNormConfig::new(v.dims()[3]).init::<B>(&Default::default());
-    let k = norm.forward_4d(v);
+    // Apply the op's own RMSNorm to get keys (must use trained norm, not a fresh one)
+    let k = op.norm.forward_4d(v);
 
     // Compute logits
     let w = op
