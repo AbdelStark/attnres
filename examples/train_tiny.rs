@@ -10,6 +10,7 @@
 use attnres_rs::{causal_mask, AttnResConfig, AttnResTransformer};
 use burn::backend::Autodiff;
 use burn::backend::NdArray;
+use burn::nn::loss::CrossEntropyLossConfig;
 use burn::optim::{AdamConfig, GradientsParams, Optimizer};
 use burn::prelude::*;
 use burn::tensor::Distribution;
@@ -62,19 +63,15 @@ fn main() {
         // Forward pass
         let logits = model.forward(input_ids, Some(&mask)); // [B, T, V]
 
-        // Simple cross-entropy loss approximation:
-        // Use MSE between logits and one-hot targets as a proxy
-        // (burn's cross-entropy requires specific setup)
+        // Cross-entropy loss for next-token prediction
         let [b, t, v] = logits.dims();
         let logits_flat = logits.reshape([b * t, v]);
+        let targets_flat = targets.reshape([b * t]);
 
-        // Use log-softmax + gather for a simple loss
-        let _targets_flat = targets.reshape([b * t]);
-        let log_probs = burn::tensor::activation::log_softmax(logits_flat, 1);
-
-        // Negative log likelihood: -sum(log_probs[target]) / num_tokens
-        // Approximate with mean of log_probs (drives all logits down uniformly)
-        let loss = log_probs.mean().neg();
+        let loss_fn = CrossEntropyLossConfig::new()
+            .with_logits(true)
+            .init(&device);
+        let loss = loss_fn.forward(logits_flat, targets_flat).mean();
 
         if step % 10 == 0 {
             let loss_val: f32 = loss.clone().into_scalar();

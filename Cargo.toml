@@ -15,6 +15,11 @@ serde_json = "1"
 
 [dev-dependencies]
 proptest = "1"
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "attn_res_benchmark"
+harness = false
 
 [[example]]
 name = "train_tiny"
@@ -23,3 +28,7 @@ path = "examples/train_tiny.rs"
 [[example]]
 name = "compare_residuals"
 path = "examples/compare_residuals.rs"
+
+[[example]]
+name = "visualize_weights"
+path = "examples/visualize_weights.rs"
