@@ -185,9 +185,7 @@ fn train_step(
     let logits = model.forward(input, Some(mask));
     let [b, t, v] = logits.dims();
 
-    let loss_fn = CrossEntropyLossConfig::new()
-        .with_logits(true)
-        .init(device);
+    let loss_fn = CrossEntropyLossConfig::new().with_logits(true).init(device);
     let loss = loss_fn
         .forward(logits.reshape([b * t, v]), targets.reshape([b * t]))
         .mean();
@@ -387,8 +385,7 @@ fn run(
                 _ => 15,
             };
             if last_tick.elapsed() >= Duration::from_millis(tick_ms) {
-                let (new_model, loss) =
-                    train_step(model, &mut optim, &mask, &config, &device);
+                let (new_model, loss) = train_step(model, &mut optim, &mask, &config, &device);
                 model = new_model;
 
                 let (weights, norms) = extract_diagnostics(&model, &device);
@@ -409,7 +406,7 @@ fn ui(f: &mut Frame, app: &App) {
             Constraint::Length(1),  // Title
             Constraint::Length(8),  // Model + Training
             Constraint::Length(10), // Loss curve
-            Constraint::Min(8),    // Weights + Norms
+            Constraint::Min(8),     // Weights + Norms
             Constraint::Length(4),  // Algorithm
             Constraint::Length(1),  // Footer
         ])
@@ -425,7 +422,10 @@ fn ui(f: &mut Frame, app: &App) {
 
 fn draw_title(f: &mut Frame, area: Rect) {
     let title = Line::from(vec![
-        Span::styled(" \u{03b1} ", Style::default().fg(Color::White).bg(ACCENT).bold()),
+        Span::styled(
+            " \u{03b1} ",
+            Style::default().fg(Color::White).bg(ACCENT).bold(),
+        ),
         Span::raw("  "),
         Span::styled("AttnRes", Style::default().fg(Color::White).bold()),
         Span::styled(
@@ -446,7 +446,10 @@ fn draw_top_panels(f: &mut Frame, area: Rect, app: &App) {
     let model_text = vec![
         Line::from(vec![
             Span::styled("  d_model     ", Style::default().fg(TEXT_MUTED)),
-            Span::styled(format!("{}", app.d_model), Style::default().fg(Color::White)),
+            Span::styled(
+                format!("{}", app.d_model),
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  layers      ", Style::default().fg(TEXT_MUTED)),
@@ -460,11 +463,17 @@ fn draw_top_panels(f: &mut Frame, area: Rect, app: &App) {
         ]),
         Line::from(vec![
             Span::styled("  blocks      ", Style::default().fg(TEXT_MUTED)),
-            Span::styled(format!("{}", app.num_blocks), Style::default().fg(Color::White)),
+            Span::styled(
+                format!("{}", app.num_blocks),
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  heads       ", Style::default().fg(TEXT_MUTED)),
-            Span::styled(format!("{}", app.num_heads), Style::default().fg(Color::White)),
+            Span::styled(
+                format!("{}", app.num_heads),
+                Style::default().fg(Color::White),
+            ),
         ]),
         Line::from(vec![
             Span::styled("  d_ff        ", Style::default().fg(TEXT_MUTED)),
@@ -480,10 +489,7 @@ fn draw_top_panels(f: &mut Frame, area: Rect, app: &App) {
     ];
     let model_block = Paragraph::new(model_text).block(
         Block::default()
-            .title(Span::styled(
-                " Model ",
-                Style::default().fg(ACCENT).bold(),
-            ))
+            .title(Span::styled(" Model ", Style::default().fg(ACCENT).bold()))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(BORDER)),
     );
@@ -504,7 +510,13 @@ fn draw_top_panels(f: &mut Frame, area: Rect, app: &App) {
     };
 
     let speed_dots: String = (1..=5)
-        .map(|i| if i <= app.speed { '\u{25cf}' } else { '\u{25cb}' })
+        .map(|i| {
+            if i <= app.speed {
+                '\u{25cf}'
+            } else {
+                '\u{25cb}'
+            }
+        })
         .collect();
 
     let pct = if app.max_steps > 0 {
@@ -774,10 +786,7 @@ fn draw_norms(f: &mut Frame, area: Rect, app: &App) {
         lines.push(Line::from(vec![
             Span::styled(label, Style::default().fg(TEXT_MUTED)),
             Span::styled(bar, Style::default().fg(ACCENT)),
-            Span::styled(
-                format!(" {:.3}", norm),
-                Style::default().fg(TEXT_DIM),
-            ),
+            Span::styled(format!(" {:.3}", norm), Style::default().fg(TEXT_DIM)),
         ]));
     }
 

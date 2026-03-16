@@ -270,7 +270,7 @@ fn test_attnres_weights_sum_to_one() {
     let config = AttnResConfig::new(32, 12, 4);
     let op = config.init_op::<TestBackend>(&device);
 
-    let blocks = vec![
+    let blocks: Vec<Tensor<TestBackend, 3>> = vec![
         Tensor::random([2, 8, 32], Distribution::Normal(0.0, 1.0), &device),
         Tensor::random([2, 8, 32], Distribution::Normal(0.0, 1.0), &device),
         Tensor::random([2, 8, 32], Distribution::Normal(0.0, 1.0), &device),
