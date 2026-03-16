@@ -378,9 +378,10 @@ fn test_two_phase_matches_standard_forward() {
 // ========================
 
 #[test]
-fn test_full_attnres_every_layer_is_boundary() {
-    // With num_blocks = num_layers (Full AttnRes), block_size=1, half_block=0.
-    // Every layer after the first should trigger a boundary.
+fn test_full_attnres_splits_attention_and_mlp_outputs() {
+    // Full AttnRes must treat each sublayer as its own source. That means the
+    // attention output of layer 0 becomes a completed block before layer 0's
+    // MLP runs, rather than waiting until the next transformer layer.
     let device = Default::default();
     let config = AttnResConfig::new(32, 4, 4).with_num_heads(4);
 
@@ -391,16 +392,18 @@ fn test_full_attnres_every_layer_is_boundary() {
     let emb = Tensor::random([1, 4, 32], Distribution::Normal(0.0, 1.0), &device);
     let mut state = BlockState::new(emb);
 
-    // Layer 0: no boundary (first layer)
     state = layers[0].forward(state, None);
-    assert_eq!(state.num_blocks(), 1, "Layer 0 should not add a block");
-
-    // Layer 1: boundary
-    state = layers[1].forward(state, None);
     assert_eq!(
         state.num_blocks(),
         2,
-        "Layer 1 should add a block in Full AttnRes"
+        "Full AttnRes should commit the attention sublayer before running the MLP"
+    );
+
+    state = layers[1].forward(state, None);
+    assert_eq!(
+        state.num_blocks(),
+        4,
+        "Full AttnRes should expose embedding + three completed sublayers after layer 1"
     );
 }
 
@@ -511,8 +514,8 @@ fn test_block_boundary_matrix() {
     // Systematically test block boundary detection across configurations.
     let device = Default::default();
 
-    // Config: 8 sublayers, 4 blocks -> block_size=2 -> half_block=1
-    // Boundaries at layer_idx > 0 && layer_idx % 1 == 0 → layers 1, 2, 3
+    // Config: 8 sublayers, 4 blocks -> block_size=2.
+    // Attention-side block starts occur at transformer layers 1, 2, 3.
     let config = AttnResConfig::new(32, 8, 4).with_num_heads(4);
     let layer0 = config.init_layer::<TestBackend>(0, &device);
     let layer1 = config.init_layer::<TestBackend>(1, &device);
@@ -529,8 +532,8 @@ fn test_block_boundary_matrix() {
     assert!(layer2.is_at_boundary(), "Layer 2 should be a boundary");
     assert!(layer3.is_at_boundary(), "Layer 3 should be a boundary");
 
-    // Config: 12 sublayers, 2 blocks -> block_size=6 -> half_block=3
-    // Boundaries at layer_idx > 0 && layer_idx % 3 == 0 → layer 3
+    // Config: 12 sublayers, 2 blocks -> block_size=6.
+    // The next block starts before transformer layer 3 attention.
     let config2 = AttnResConfig::new(32, 12, 2).with_num_heads(4);
     let l0 = config2.init_layer::<TestBackend>(0, &device);
     let l1 = config2.init_layer::<TestBackend>(1, &device);
@@ -548,15 +551,45 @@ fn test_block_boundary_matrix() {
     assert!(!l4.is_at_boundary());
     assert!(!l5.is_at_boundary());
 
-    // Config: Full AttnRes (4 sublayers, 4 blocks) -> block_size=1 -> half_block=0
-    // Special case: every layer after first is boundary
+    // Config: Full AttnRes (4 sublayers, 4 blocks) -> block_size=1.
+    // The public helper reports only attention-side block starts.
     let config3 = AttnResConfig::new(32, 4, 4).with_num_heads(4);
     let fl0 = config3.init_layer::<TestBackend>(0, &device);
     let fl1 = config3.init_layer::<TestBackend>(1, &device);
     assert!(!fl0.is_at_boundary());
     assert!(
         fl1.is_at_boundary(),
-        "Full AttnRes: every layer after first is boundary"
+        "Full AttnRes should start a new block before layer 1 attention"
+    );
+}
+
+#[test]
+fn test_odd_block_size_boundary_occurs_before_mlp() {
+    // 6 sublayers, 2 blocks -> block size 3. The first block contains:
+    // attn0, mlp0, attn1. The boundary therefore occurs before layer 1's MLP,
+    // not before its attention sublayer.
+    let device = Default::default();
+    let config = AttnResConfig::new(32, 6, 2).with_num_heads(4);
+    let layers: Vec<_> = (0..3)
+        .map(|i| config.init_layer::<TestBackend>(i, &device))
+        .collect();
+
+    assert!(
+        !layers[1].is_at_boundary(),
+        "Odd block sizes should not shift the boundary onto the attention sublayer"
+    );
+
+    let emb = Tensor::random([1, 4, 32], Distribution::Normal(0.0, 1.0), &device);
+    let mut state = BlockState::new(emb);
+
+    state = layers[0].forward(state, None);
+    assert_eq!(state.num_blocks(), 1);
+
+    state = layers[1].forward(state, None);
+    assert_eq!(
+        state.num_blocks(),
+        2,
+        "The first block should be committed inside layer 1 before its MLP"
     );
 }
 
@@ -564,7 +597,7 @@ fn test_block_boundary_matrix() {
 fn test_block_accumulation_count() {
     // Verify the exact number of blocks accumulated after a full forward pass.
     let device = Default::default();
-    // 8 sublayers, 2 blocks -> block_size=4 -> half_block=2
+    // 8 sublayers, 2 blocks -> block_size=4
     // 4 transformer layers (indices 0..3)
     // Boundaries at layers where idx > 0 && idx % 2 == 0 → layer 2
     let config = AttnResConfig::new(32, 8, 2).with_num_heads(4);
@@ -583,9 +616,9 @@ fn test_block_accumulation_count() {
     }
 
     // Layer 0: no boundary → 1 block (initial embedding)
-    // Layer 1: idx=1, half_block=2, 1%2≠0 → no boundary → 1 block
-    // Layer 2: idx=2, half_block=2, 2%2==0 and 2>0 → boundary → 2 blocks
-    // Layer 3: idx=3, half_block=2, 3%2≠0 → no boundary → 2 blocks
+    // Layer 1: still inside block 1 → 1 block
+    // Layer 2: starts block 2 before attention → 2 blocks
+    // Layer 3: still inside block 2 → 2 blocks
     assert_eq!(
         counts,
         vec![1, 1, 2, 2],

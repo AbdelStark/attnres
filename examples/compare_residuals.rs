@@ -1,7 +1,7 @@
 //! Compare standard residual connections vs AttnRes.
 //!
 //! Shows that an AttnRes model with zero-initialized pseudo-queries
-//! starts as equivalent to uniform averaging over all prior blocks,
+//! starts as uniform averaging over all prior blocks,
 //! and demonstrates the forward pass works correctly.
 //!
 //! Run with: `cargo run --example compare_residuals`
@@ -20,7 +20,7 @@ fn main() {
 
     // Demo 1: Zero-init produces uniform weights (equivalent to mean)
     println!("1. Zero-initialized AttnRes = uniform averaging");
-    println!("   (equivalent to standard residual connections)\n");
+    println!("   (equal weights over all available sources)\n");
 
     let config = AttnResConfig::new(32, 4, 2);
     let op: AttnResOp<B> = config.init_op(&device);

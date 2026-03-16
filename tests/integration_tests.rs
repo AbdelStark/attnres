@@ -146,6 +146,28 @@ fn test_two_phase_with_causal_mask() {
     );
 }
 
+#[test]
+fn test_two_phase_with_odd_block_size() {
+    // 6 sublayers / 2 blocks => block size 3, which forces a boundary inside
+    // a transformer layer (between attention and MLP).
+    let device = Default::default();
+    let config = AttnResConfig::new(32, 6, 2)
+        .with_num_heads(4)
+        .with_vocab_size(50);
+
+    let model: AttnResTransformer<TestBackend> = config.init_model(&device);
+    let input = Tensor::<TestBackend, 2, Int>::zeros([1, 8], &device);
+
+    let standard = model.forward(input.clone(), None);
+    let two_phase = model.forward_two_phase(input, None);
+
+    let diff: f32 = (standard - two_phase).abs().max().into_scalar();
+    assert!(
+        diff < 1e-3,
+        "Two-phase should match standard when block boundaries occur before MLP, diff={diff}"
+    );
+}
+
 // ========================
 // Serialization Integration Tests
 // ========================

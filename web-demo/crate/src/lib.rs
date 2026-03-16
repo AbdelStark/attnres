@@ -5,7 +5,7 @@
 //! Every function mirrors the corresponding attnres source and cites
 //! the paper equations it implements.
 //!
-//! Reference: "Attention as a Hypernetwork" (MoonshotAI/Kimi), Section 3.
+//! Reference: "Attention Residuals" (MoonshotAI/Kimi), Section 3.
 
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -116,9 +116,17 @@ impl AttnResOp {
     /// alpha = softmax(logits, dim=0)       // [N+1]  — SOFTMAX OVER DEPTH
     /// h = sum(alpha_i * V_i)               // [D]
     /// ```
-    fn forward(&self, blocks: &[Vec<f32>], partial: &[f32]) -> (Vec<f32>, Vec<f32>) {
+    fn forward_optional_partial(
+        &self,
+        blocks: &[Vec<f32>],
+        partial: Option<&[f32]>,
+    ) -> (Vec<f32>, Vec<f32>) {
         let mut sources: Vec<&[f32]> = blocks.iter().map(|b| b.as_slice()).collect();
-        sources.push(partial);
+        if let Some(partial) = partial {
+            sources.push(partial);
+        }
+
+        assert!(!sources.is_empty(), "AttnResOp needs at least one source");
 
         // Step 1-2: Apply RMSNorm to get keys
         let keys: Vec<Vec<f32>> = sources.iter().map(|s| self.rms_norm(s)).collect();
@@ -149,6 +157,10 @@ impl AttnResOp {
         (output, alpha)
     }
 
+    fn forward(&self, blocks: &[Vec<f32>], partial: &[f32]) -> (Vec<f32>, Vec<f32>) {
+        self.forward_optional_partial(blocks, Some(partial))
+    }
+
     /// Set pseudo-query weights directly (for training simulation).
     fn set_pseudo_query(&mut self, weights: &[f32]) {
         self.pseudo_query = weights.to_vec();
@@ -177,13 +189,24 @@ impl AttnResLayer {
         }
     }
 
-    /// Check if this layer starts a new block.
-    ///
-    /// Mirrors `attnres::AttnResLayer::is_at_boundary`
-    /// Source: `src/layer.rs:72-75`
-    fn is_at_boundary(&self) -> bool {
-        let half_block = self.block_size / 2;
-        self.layer_idx > 0 && (half_block == 0 || self.layer_idx.is_multiple_of(half_block))
+    fn attn_sublayer_idx(&self) -> usize {
+        self.layer_idx * 2
+    }
+
+    fn mlp_sublayer_idx(&self) -> usize {
+        self.attn_sublayer_idx() + 1
+    }
+
+    fn starts_new_block_before_sublayer(&self, sublayer_idx: usize) -> bool {
+        sublayer_idx > 0 && sublayer_idx.is_multiple_of(self.block_size)
+    }
+
+    fn starts_new_block_before_attn(&self) -> bool {
+        self.starts_new_block_before_sublayer(self.attn_sublayer_idx())
+    }
+
+    fn starts_new_block_before_mlp(&self) -> bool {
+        self.starts_new_block_before_sublayer(self.mlp_sublayer_idx())
     }
 
     /// Forward pass through this layer.
@@ -195,20 +218,19 @@ impl AttnResLayer {
     fn forward(
         &self,
         blocks: &[Vec<f32>],
-        partial: &[f32],
+        partial: Option<&[f32]>,
     ) -> (Vec<Vec<f32>>, Vec<f32>, Vec<f32>, Vec<f32>) {
         let mut blocks = blocks.to_vec();
-        let at_boundary = self.is_at_boundary();
-
-        let partial_for_attn = if at_boundary {
-            blocks.push(partial.to_vec());
-            vec![0.0; self.d_model]
-        } else {
-            partial.to_vec()
-        };
 
         // AttnRes before self-attention
-        let (h_attn, attn_weights) = self.attn_res.forward(&blocks, &partial_for_attn);
+        let (h_attn, attn_weights) = self.attn_res.forward_optional_partial(&blocks, partial);
+        let mut partial_for_attn = partial
+            .map(|current| current.to_vec())
+            .unwrap_or_else(|| vec![0.0; self.d_model]);
+        if self.starts_new_block_before_attn() {
+            blocks.push(partial_for_attn.clone());
+            partial_for_attn = vec![0.0; self.d_model];
+        }
 
         // Simulate attention sublayer output (simplified — adds small perturbation)
         // In the real model this would be MultiHeadAttention
@@ -222,13 +244,20 @@ impl AttnResLayer {
             .collect();
 
         // AttnRes before MLP
-        let (h_mlp, mlp_weights) = self.mlp_res.forward(&blocks, &partial_after_attn);
+        let (h_mlp, mlp_weights) = self
+            .mlp_res
+            .forward_optional_partial(&blocks, Some(&partial_after_attn));
+        let mut partial_for_mlp = partial_after_attn;
+        if self.starts_new_block_before_mlp() {
+            blocks.push(partial_for_mlp.clone());
+            partial_for_mlp = vec![0.0; self.d_model];
+        }
 
         // Simulate MLP sublayer output
         let mlp_out: Vec<f32> = h_mlp.iter().map(|v| v * 0.1).collect();
 
         // Accumulate into partial
-        let partial_after_mlp: Vec<f32> = partial_after_attn
+        let partial_after_mlp: Vec<f32> = partial_for_mlp
             .iter()
             .zip(mlp_out.iter())
             .map(|(a, b)| a + b)
@@ -299,20 +328,24 @@ impl AttnResEngine {
         }
 
         let mut blocks: Vec<Vec<f32>> = vec![embedding.clone()]; // b_0 = embedding
-        let mut partial = vec![0.0f32; d];
+        let mut partial: Option<Vec<f32>> = None;
 
         let mut all_attn_weights: Vec<Vec<f32>> = Vec::new();
         let mut block_boundaries: Vec<usize> = Vec::new();
         let mut blocks_per_layer: Vec<usize> = Vec::new();
 
         for layer in &self.layers {
-            let (new_blocks, new_partial, attn_w, mlp_w) = layer.forward(&blocks, &partial);
-            blocks = new_blocks;
-            partial = new_partial;
-
-            if layer.is_at_boundary() {
-                block_boundaries.push(layer.layer_idx);
+            if layer.starts_new_block_before_attn() {
+                block_boundaries.push(layer.attn_sublayer_idx());
             }
+            if layer.starts_new_block_before_mlp() {
+                block_boundaries.push(layer.mlp_sublayer_idx());
+            }
+
+            let (new_blocks, new_partial, attn_w, mlp_w) =
+                layer.forward(&blocks, partial.as_deref());
+            blocks = new_blocks;
+            partial = Some(new_partial);
 
             blocks_per_layer.push(blocks.len());
             all_attn_weights.push(attn_w);
@@ -426,10 +459,11 @@ impl AttnResEngine {
 
         let embedding = vec![0.1f32; d];
         let mut blocks: Vec<Vec<f32>> = vec![embedding];
-        let mut partial = vec![0.0f32; d];
+        let mut partial: Option<Vec<f32>> = None;
 
         for layer in &self.layers {
-            let (new_blocks, new_partial, attn_w, mlp_w) = layer.forward(&blocks, &partial);
+            let (new_blocks, new_partial, attn_w, mlp_w) =
+                layer.forward(&blocks, partial.as_deref());
 
             depth_weights.push(attn_w);
             depth_weights.push(mlp_w);
@@ -453,7 +487,7 @@ impl AttnResEngine {
             pseudo_query_norms.push(mlp_norm);
 
             blocks = new_blocks;
-            partial = new_partial;
+            partial = Some(new_partial);
         }
 
         // Simulated loss: starts high, decays exponentially with noise

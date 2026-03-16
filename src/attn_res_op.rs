@@ -34,7 +34,7 @@ impl AttnResConfig {
     ///
     /// The pseudo-query is zero-initialized per the paper's requirement for
     /// training stability. This means the operation starts as uniform averaging
-    /// over all sources (equivalent to standard residual connections).
+    /// over all available sources.
     pub fn init_op<B: Backend>(&self, device: &B::Device) -> AttnResOp<B> {
         AttnResOp {
             // CRITICAL: zero initialization per paper requirement
@@ -47,6 +47,52 @@ impl AttnResConfig {
 }
 
 impl<B: Backend> AttnResOp<B> {
+    /// Compute attention residual over any available block representations.
+    ///
+    /// `partial_block` is optional because the first sublayer of the network
+    /// and the first sublayer of each new block attend only over completed
+    /// blocks (Eq. 6 in the paper) and therefore have no intra-block partial.
+    pub fn forward_optional_partial(
+        &self,
+        blocks: &[Tensor<B, 3>],
+        partial_block: Option<&Tensor<B, 3>>,
+    ) -> Tensor<B, 3> {
+        let mut sources: Vec<Tensor<B, 3>> = blocks.to_vec();
+        if let Some(partial_block) = partial_block {
+            sources.push(partial_block.clone());
+        }
+
+        assert!(
+            !sources.is_empty(),
+            "AttnResOp requires at least one source tensor"
+        );
+
+        // Step 1: Stack all sources into value matrix
+        // V: [N, B, T, D] or [N+1, B, T, D]
+        let v = Tensor::stack(sources, 0);
+
+        // Step 2: Apply RMSNorm to get keys
+        // K: same shape as V
+        let k = self.norm.forward_4d(v.clone());
+
+        // Step 3: Compute attention logits
+        let w = self
+            .pseudo_query
+            .val()
+            .unsqueeze_dim::<2>(0)
+            .unsqueeze_dim::<3>(0)
+            .unsqueeze_dim::<4>(0); // [1, 1, 1, D]
+        let logits = (k * w).sum_dim(3).squeeze_dim::<3>(3);
+
+        // Step 4: Softmax over the depth dimension (dim=0)
+        let alpha = softmax(logits, 0);
+
+        // Step 5: Weighted sum of values
+        let alpha_expanded = alpha.unsqueeze_dim::<4>(3);
+        let weighted = v * alpha_expanded;
+        weighted.sum_dim(0).squeeze_dim::<3>(0)
+    }
+
     /// Compute attention residual over block representations.
     ///
     /// # Arguments
@@ -56,38 +102,7 @@ impl<B: Backend> AttnResOp<B> {
     /// # Returns
     /// * Attention-weighted combination of all sources [B, T, D]
     pub fn forward(&self, blocks: &[Tensor<B, 3>], partial_block: &Tensor<B, 3>) -> Tensor<B, 3> {
-        // Step 1: Stack all sources into value matrix
-        // V: [N+1, B, T, D]
-        let mut sources: Vec<Tensor<B, 3>> = blocks.to_vec();
-        sources.push(partial_block.clone());
-        let v = Tensor::stack(sources, 0); // [N+1, B, T, D]
-
-        // Step 2: Apply RMSNorm to get keys
-        // K: [N+1, B, T, D]
-        let k = self.norm.forward_4d(v.clone());
-
-        // Step 3: Compute attention logits
-        // w: [D] -> [1, 1, 1, D] for broadcasting
-        // logits = sum(K * w, dim=3) -> [N+1, B, T]
-        let w = self
-            .pseudo_query
-            .val()
-            .unsqueeze_dim::<2>(0)
-            .unsqueeze_dim::<3>(0)
-            .unsqueeze_dim::<4>(0); // [1, 1, 1, D]
-        let logits = (k * w).sum_dim(3).squeeze_dim::<3>(3); // [N+1, B, T]
-
-        // Step 4: Softmax over the depth dimension (dim=0)
-        // CRITICAL: softmax over depth, NOT sequence
-        let alpha = softmax(logits, 0); // [N+1, B, T]
-
-        // Step 5: Weighted sum of values
-        // alpha: [N+1, B, T] -> [N+1, B, T, 1]
-        // v: [N+1, B, T, D]
-        // result: sum over dim=0 -> [B, T, D]
-        let alpha_expanded = alpha.unsqueeze_dim::<4>(3); // [N+1, B, T, 1]
-        let weighted = v * alpha_expanded; // [N+1, B, T, D]
-        weighted.sum_dim(0).squeeze_dim::<3>(0) // [B, T, D]
+        self.forward_optional_partial(blocks, Some(partial_block))
     }
 }
 
@@ -159,5 +174,21 @@ mod tests {
         let expected = (blocks[0].clone() + partial) / 2.0;
         let diff: f32 = (output - expected).abs().max().into_scalar();
         assert!(diff < 1e-4, "Single block should produce mean, diff={diff}");
+    }
+
+    #[test]
+    fn test_blocks_only_returns_only_source() {
+        let device = Default::default();
+        let config = AttnResConfig::new(32, 4, 2);
+        let op = config.init_op::<TestBackend>(&device);
+
+        let embedding = Tensor::random([1, 8, 32], Distribution::Normal(0.0, 1.0), &device);
+        let output = op.forward_optional_partial(&[embedding.clone()], None);
+
+        let diff: f32 = (output - embedding).abs().max().into_scalar();
+        assert!(
+            diff < 1e-5,
+            "A single completed block should be returned unchanged, diff={diff}"
+        );
     }
 }

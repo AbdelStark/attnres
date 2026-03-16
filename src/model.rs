@@ -12,7 +12,9 @@ use crate::block_state::BlockState;
 use crate::config::AttnResConfig;
 use crate::layer::AttnResLayer;
 use crate::rms_norm::{RmsNorm, RmsNormConfig};
-use crate::two_phase::{compute_intra_logit, online_softmax_merge, phase1_batched};
+use crate::two_phase::{
+    compute_intra_logit, normalize_inter_output, online_softmax_merge, phase1_batched,
+};
 
 #[derive(Module, Debug)]
 pub struct AttnResTransformer<B: Backend> {
@@ -113,130 +115,79 @@ impl<B: Backend> AttnResTransformer<B> {
         mask: Option<&Tensor<B, 3>>,
     ) -> Tensor<B, 3> {
         let embeddings = self.embedding.forward(input_ids);
-        let mut state = BlockState::new(embeddings);
+        let mut completed_blocks = vec![embeddings];
+        let mut current_block: Option<Tensor<B, 3>> = None;
 
-        // Group layers into blocks based on block boundaries
+        let block_size = self.layers[0].block_size();
+        let total_sublayers = self.layers.len() * 2;
         let mut block_start = 0;
-        while block_start < self.layers.len() {
-            // Find the end of this block: layers until next boundary
-            let mut block_end = block_start + 1;
-            while block_end < self.layers.len() && !self.layers[block_end].is_at_boundary() {
-                block_end += 1;
+
+        while block_start < total_sublayers {
+            if let Some(previous_block) = current_block.take() {
+                completed_blocks.push(previous_block);
             }
 
-            let block_layers = &self.layers[block_start..block_end];
+            let block_end = (block_start + block_size).min(total_sublayers);
+            let mut ops = Vec::with_capacity(block_end - block_start);
 
-            if state.blocks.is_empty() {
-                // No inter-block context yet; use standard forward
-                for layer in block_layers {
-                    state = layer.forward(state, mask);
-                }
-            } else {
-                // Two-phase forward for this block of layers
-                state = self.forward_block_two_phase(state, block_layers, mask);
+            for sublayer_idx in block_start..block_end {
+                let layer = &self.layers[sublayer_idx / 2];
+                let (attn_op, mlp_op) = layer.attn_res_ops();
+                ops.push(if sublayer_idx % 2 == 0 {
+                    attn_op
+                } else {
+                    mlp_op
+                });
             }
 
+            let phase1 = phase1_batched(&ops, &completed_blocks);
+            let mut partial: Option<Tensor<B, 3>> = None;
+
+            for (offset, sublayer_idx) in (block_start..block_end).enumerate() {
+                let layer = &self.layers[sublayer_idx / 2];
+                let op = ops[offset];
+
+                let h = if offset == 0 {
+                    normalize_inter_output(
+                        phase1.outputs[offset].clone(),
+                        phase1.sum_exp[offset].clone(),
+                    )
+                } else {
+                    let partial_ref = partial
+                        .as_ref()
+                        .expect("missing intra-block partial during two-phase forward");
+                    let intra_logit = compute_intra_logit(op, partial_ref);
+                    online_softmax_merge(
+                        phase1.outputs[offset].clone(),
+                        phase1.max_logits[offset].clone(),
+                        phase1.sum_exp[offset].clone(),
+                        intra_logit,
+                        partial_ref.clone(),
+                    )
+                };
+
+                let sublayer_out = if sublayer_idx % 2 == 0 {
+                    layer.forward_attn_sublayer(h, mask)
+                } else {
+                    layer.forward_mlp_sublayer(h)
+                };
+
+                partial = Some(match partial {
+                    Some(current_partial) => current_partial + sublayer_out,
+                    None => sublayer_out,
+                });
+            }
+
+            current_block = partial;
             block_start = block_end;
         }
 
-        let output = state
-            .partial_block
-            .expect("partial_block missing after forward pass; this is a bug in AttnResLayer");
+        let output = current_block.expect(
+            "missing final block after two-phase forward; this is a bug in AttnResTransformer",
+        );
 
         let normed = self.final_norm.forward(output);
         self.lm_head.forward(normed)
-    }
-
-    /// Two-phase forward for a single block of layers.
-    ///
-    /// Uses Phase 1 (batched inter-block attention) + Phase 2 (sequential intra-block).
-    fn forward_block_two_phase(
-        &self,
-        mut state: BlockState<B>,
-        block_layers: &[AttnResLayer<B>],
-        mask: Option<&Tensor<B, 3>>,
-    ) -> BlockState<B> {
-        // Phase 2 setup: handle block boundary first so blocks are correct for Phase 1
-        let current_partial = state
-            .partial_block
-            .take()
-            .unwrap_or_else(|| Tensor::zeros_like(state.blocks.last().unwrap()));
-
-        let first_layer = &block_layers[0];
-        let at_boundary = first_layer.is_at_boundary();
-
-        if at_boundary {
-            state.blocks.push(current_partial.clone());
-        }
-
-        let mut partial = if at_boundary {
-            Tensor::zeros_like(state.blocks.last().unwrap())
-        } else {
-            current_partial
-        };
-
-        // Collect all AttnResOp references for Phase 1 batching
-        // Each layer has 2 ops: attn_res, mlp_res
-        let all_ops: Vec<_> = block_layers
-            .iter()
-            .flat_map(|layer| {
-                let (attn_op, mlp_op) = layer.attn_res_ops();
-                vec![attn_op, mlp_op]
-            })
-            .collect();
-
-        // Phase 1: Batch all inter-block attention (now with correct blocks)
-        let phase1 = phase1_batched(&all_ops, &state.blocks);
-
-        // Process each sublayer using Phase 1 results + online softmax merge
-        for (layer_idx, layer) in block_layers.iter().enumerate() {
-            let attn_op_idx = layer_idx * 2;
-            let mlp_op_idx = layer_idx * 2 + 1;
-
-            // === AttnRes before self-attention (using two-phase) ===
-            let h = if phase1.outputs.is_empty() {
-                // No inter-block context: fall back to standard
-                let (attn_op, _) = layer.attn_res_ops();
-                attn_op.forward(&state.blocks, &partial)
-            } else {
-                let (attn_op, _) = layer.attn_res_ops();
-                let intra_logit = compute_intra_logit(attn_op, &partial);
-                online_softmax_merge(
-                    phase1.outputs[attn_op_idx].clone(),
-                    phase1.max_logits[attn_op_idx].clone(),
-                    phase1.sum_exp[attn_op_idx].clone(),
-                    intra_logit,
-                    partial.clone(),
-                )
-            };
-
-            // Attention sublayer
-            let attn_out = layer.forward_attn_sublayer(h, mask);
-            partial = partial + attn_out;
-
-            // === AttnRes before MLP (using two-phase) ===
-            let h = if phase1.outputs.is_empty() {
-                let (_, mlp_op) = layer.attn_res_ops();
-                mlp_op.forward(&state.blocks, &partial)
-            } else {
-                let (_, mlp_op) = layer.attn_res_ops();
-                let intra_logit = compute_intra_logit(mlp_op, &partial);
-                online_softmax_merge(
-                    phase1.outputs[mlp_op_idx].clone(),
-                    phase1.max_logits[mlp_op_idx].clone(),
-                    phase1.sum_exp[mlp_op_idx].clone(),
-                    intra_logit,
-                    partial.clone(),
-                )
-            };
-
-            // MLP sublayer
-            let mlp_out = layer.forward_mlp_sublayer(h);
-            partial = partial + mlp_out;
-        }
-
-        state.partial_block = Some(partial);
-        state
     }
 
     /// Forward pass returning hidden states (without LM head).

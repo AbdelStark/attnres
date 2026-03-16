@@ -204,10 +204,12 @@ fn train_step(
 fn compute_alpha(
     op: &AttnResOp<AB>,
     blocks: &[Tensor<AB, 3>],
-    partial: &Tensor<AB, 3>,
+    partial: Option<&Tensor<AB, 3>>,
 ) -> Vec<f32> {
     let mut sources: Vec<Tensor<AB, 3>> = blocks.to_vec();
-    sources.push(partial.clone());
+    if let Some(partial) = partial {
+        sources.push(partial.clone());
+    }
     let n = sources.len();
 
     let v = Tensor::stack(sources, 0); // [N+1, B, T, D]
@@ -268,26 +270,8 @@ fn extract_diagnostics(
         norms.push(norm_a);
         norms.push(norm_m);
 
-        // Replicate boundary handling from layer.forward() to get
-        // the correct block state for alpha computation.
-        let current_partial = state
-            .partial_block
-            .clone()
-            .unwrap_or_else(|| Tensor::zeros_like(state.blocks.last().unwrap()));
-
-        let at_boundary = layer.is_at_boundary();
-        let mut blocks_snap = state.blocks.clone();
-        if at_boundary {
-            blocks_snap.push(current_partial.clone());
-        }
-        let partial_snap = if at_boundary {
-            Tensor::zeros_like(blocks_snap.last().unwrap())
-        } else {
-            current_partial
-        };
-
         // Compute actual attention weights for the attn sublayer
-        let alpha = compute_alpha(attn_res, &blocks_snap, &partial_snap);
+        let alpha = compute_alpha(attn_res, &state.blocks, state.partial_block.as_ref());
         depth_weights.push(alpha);
 
         // Run the real forward to advance block state

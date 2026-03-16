@@ -141,7 +141,7 @@ fn main() {
     println!("  - This allows selective information routing across depth");
     println!();
     println!("  At initialization (zero pseudo-queries), all layers attend");
-    println!("  uniformly, equivalent to standard residual connections.");
+    println!("  uniformly across all available sources.");
     println!("  Training gradually differentiates the attention patterns.");
 
     println!("\nDone!");

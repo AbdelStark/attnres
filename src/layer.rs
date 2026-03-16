@@ -64,6 +64,26 @@ impl AttnResConfig {
 }
 
 impl<B: Backend> AttnResLayer<B> {
+    fn attn_sublayer_idx(&self) -> usize {
+        self.layer_idx * 2
+    }
+
+    fn mlp_sublayer_idx(&self) -> usize {
+        self.attn_sublayer_idx() + 1
+    }
+
+    fn starts_new_block_before_sublayer(&self, sublayer_idx: usize) -> bool {
+        sublayer_idx > 0 && sublayer_idx.is_multiple_of(self.block_size)
+    }
+
+    pub(crate) fn starts_new_block_before_attn(&self) -> bool {
+        self.starts_new_block_before_sublayer(self.attn_sublayer_idx())
+    }
+
+    pub(crate) fn starts_new_block_before_mlp(&self) -> bool {
+        self.starts_new_block_before_sublayer(self.mlp_sublayer_idx())
+    }
+
     /// Get the layer index.
     pub fn layer_idx(&self) -> usize {
         self.layer_idx
@@ -74,10 +94,14 @@ impl<B: Backend> AttnResLayer<B> {
         self.block_size
     }
 
-    /// Check if this layer is at a block boundary.
+    /// Check if this layer's attention sublayer starts a new block.
+    ///
+    /// Block sizing is defined in sublayers, so the MLP sublayer can also
+    /// start a new block when `block_size` is odd or when `block_size == 1`
+    /// (Full AttnRes). This helper preserves the historical public API by
+    /// reporting only the pre-attention boundary.
     pub fn is_at_boundary(&self) -> bool {
-        let half_block = self.block_size / 2;
-        self.layer_idx > 0 && (half_block == 0 || self.layer_idx.is_multiple_of(half_block))
+        self.starts_new_block_before_attn()
     }
 
     /// Get references to the AttnRes operations (attn_res, mlp_res).
@@ -116,33 +140,18 @@ impl<B: Backend> AttnResLayer<B> {
     /// # Returns
     /// * Updated block state
     pub fn forward(&self, mut state: BlockState<B>, mask: Option<&Tensor<B, 3>>) -> BlockState<B> {
-        // Get the current partial block, or zeros if at the start of a new block
-        let current_partial = state
-            .partial_block
-            .take()
-            .unwrap_or_else(|| Tensor::zeros_like(state.blocks.last().unwrap()));
-
-        // === Check block boundary ===
-        // Block boundary occurs every block_size/2 transformer layers (each layer = 2 sublayers).
-        // For Full AttnRes (block_size=1), every layer after the first is a boundary.
-        let half_block = self.block_size / 2;
-        let at_boundary =
-            self.layer_idx > 0 && (half_block == 0 || self.layer_idx.is_multiple_of(half_block));
-
-        if at_boundary {
-            // Push the completed partial block as a new block
-            state.blocks.push(current_partial.clone());
-        }
-
-        // The partial block for AttnRes input: if we just pushed, start fresh; otherwise use current
-        let partial_for_attn = if at_boundary {
-            Tensor::zeros_like(state.blocks.last().unwrap())
-        } else {
-            current_partial
-        };
-
         // === AttnRes before self-attention ===
-        let h = self.attn_res.forward(&state.blocks, &partial_for_attn);
+        let current_partial = state.partial_block.take();
+        let h = self
+            .attn_res
+            .forward_optional_partial(&state.blocks, current_partial.as_ref());
+
+        let mut partial_for_attn =
+            current_partial.unwrap_or_else(|| Tensor::zeros_like(state.blocks.last().unwrap()));
+        if self.starts_new_block_before_attn() {
+            state.blocks.push(partial_for_attn.clone());
+            partial_for_attn = Tensor::zeros_like(state.blocks.last().unwrap());
+        }
 
         // === Self-attention sublayer ===
         let normed = self.attn_norm.forward(h);
@@ -152,14 +161,22 @@ impl<B: Backend> AttnResLayer<B> {
         let partial_after_attn = partial_for_attn + attn_out;
 
         // === AttnRes before MLP ===
-        let h = self.mlp_res.forward(&state.blocks, &partial_after_attn);
+        let h = self
+            .mlp_res
+            .forward_optional_partial(&state.blocks, Some(&partial_after_attn));
+
+        let mut partial_for_mlp = partial_after_attn;
+        if self.starts_new_block_before_mlp() {
+            state.blocks.push(partial_for_mlp.clone());
+            partial_for_mlp = Tensor::zeros_like(state.blocks.last().unwrap());
+        }
 
         // === MLP sublayer ===
         let normed = self.mlp_norm.forward(h);
         let mlp_out = self.mlp.forward(normed);
 
         // Update partial block with MLP output
-        let partial_after_mlp = partial_after_attn + mlp_out;
+        let partial_after_mlp = partial_for_mlp + mlp_out;
 
         state.partial_block = Some(partial_after_mlp);
         state

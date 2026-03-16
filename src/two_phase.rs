@@ -26,13 +26,6 @@ pub struct Phase1Result<B: Backend> {
 ///
 /// All S pseudo-queries are batched against the N cached block representations.
 ///
-/// **Note on norm sharing**: This function uses `ops[0].norm` to normalize the
-/// stacked block values for all queries. This is correct because all AttnResOp
-/// instances within a model share the same RmsNormConfig (same d_model, same eps),
-/// and in practice their learned gamma parameters stay close during training since
-/// they process the same block representations. The sharing avoids redundant
-/// normalization passes over the block stack.
-///
 /// # Arguments
 /// * `ops` - The S AttnResOp modules (one per sublayer in the block)
 /// * `blocks` - The N completed block representations [each [B, T, D]]
@@ -55,14 +48,15 @@ pub fn phase1_batched<B: Backend>(
 
     // Stack blocks: V = [N, B, T, D]
     let v = Tensor::stack(blocks.to_vec(), 0);
-    // Apply shared RMSNorm to get keys (use the first op's norm as representative)
-    let k = ops[0].norm.forward_4d(v.clone());
 
     let mut outputs = Vec::with_capacity(ops.len());
     let mut max_logits = Vec::with_capacity(ops.len());
     let mut sum_exp = Vec::with_capacity(ops.len());
 
     for op in ops {
+        // Exact equivalence requires using each AttnResOp's own RMSNorm.
+        let k = op.norm.forward_4d(v.clone());
+
         // Compute logits for this query against all blocks
         let w = op
             .pseudo_query
@@ -70,7 +64,7 @@ pub fn phase1_batched<B: Backend>(
             .unsqueeze_dim::<2>(0)
             .unsqueeze_dim::<3>(0)
             .unsqueeze_dim::<4>(0); // [1, 1, 1, D]
-        let logits = (k.clone() * w).sum_dim(3).squeeze_dim::<3>(3); // [N, B, T]
+        let logits = (k * w).sum_dim(3).squeeze_dim::<3>(3); // [N, B, T]
 
         // Compute softmax statistics for online merge
         let max_l = logits.clone().max_dim(0).squeeze_dim::<2>(0); // [B, T]
@@ -92,6 +86,16 @@ pub fn phase1_batched<B: Backend>(
         max_logits,
         sum_exp,
     }
+}
+
+/// Normalize an inter-block Phase 1 output when there is no intra-block source.
+///
+/// This corresponds to Algorithm 1, line 8: `h_l <- o_l / l_l`.
+pub fn normalize_inter_output<B: Backend>(
+    inter_output: Tensor<B, 3>,
+    inter_sum_exp: Tensor<B, 2>,
+) -> Tensor<B, 3> {
+    inter_output / inter_sum_exp.unsqueeze_dim::<3>(2)
 }
 
 /// Merge Phase 1 inter-block result with a new intra-block logit and value
@@ -134,7 +138,7 @@ pub fn online_softmax_merge<B: Backend>(
 
 /// Compute the intra-block logit for a pseudo-query against a partial sum.
 ///
-/// logit = dot(w, RMSNorm(partial)) averaged over [B, T].
+/// Returns one logit per batch element and token position: `[B, T]`.
 pub fn compute_intra_logit<B: Backend>(op: &AttnResOp<B>, partial: &Tensor<B, 3>) -> Tensor<B, 2> {
     let normed = op.norm.forward(partial.clone()); // [B, T, D]
     let w = op
@@ -182,5 +186,28 @@ mod tests {
         let partial = Tensor::random([1, 8, 32], Distribution::Normal(0.0, 1.0), &device);
         let logit = compute_intra_logit(&op, &partial);
         assert_eq!(logit.dims(), [1, 8]);
+    }
+
+    #[test]
+    fn test_phase1_inter_only_matches_blocks_only_forward() {
+        let device = Default::default();
+        let config = crate::config::AttnResConfig::new(32, 4, 2);
+        let op = config.init_op::<TestBackend>(&device);
+
+        let blocks = vec![
+            Tensor::random([1, 8, 32], Distribution::Normal(0.0, 1.0), &device),
+            Tensor::random([1, 8, 32], Distribution::Normal(0.0, 1.0), &device),
+        ];
+
+        let standard = op.forward_optional_partial(&blocks, None);
+        let phase1 = phase1_batched(&[&op], &blocks);
+        let inter_only =
+            normalize_inter_output(phase1.outputs[0].clone(), phase1.sum_exp[0].clone());
+
+        let diff: f32 = (standard - inter_only).abs().max().into_scalar();
+        assert!(
+            diff < 1e-5,
+            "Phase 1 inter-only output should match blocks-only forward, diff={diff}"
+        );
     }
 }

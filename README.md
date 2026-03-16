@@ -32,7 +32,7 @@ h = h_l + F(h_l)              V = [b₀; b₁; …; bₙ]      ← stack all blo
                                h = Σ αᵢ · Vᵢ             ← weighted combination
 ```
 
-Each transformer layer has **two** AttnRes operations (before self-attention and before MLP), each with its own learned pseudo-query vector **w_l** initialized to zero. At initialization, all blocks receive equal weight (standard residual behavior). During training, the model learns to selectively route information from the most relevant depths.
+Each transformer layer has **two** AttnRes operations (before self-attention and before MLP), each with its own learned pseudo-query vector **w_l** initialized to zero. At initialization, all available sources receive equal weight. During training, the model learns to selectively route information from the most relevant depths.
 
 ## Quick Start
 
