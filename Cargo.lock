@@ -167,7 +167,7 @@ checksum = "628d228f918ac3b82fe590352cc719d30664a0c13ca3a60266fe02c7132d480a"
 
 [[package]]
 name = "attnres"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "burn",
  "burn-ndarray",

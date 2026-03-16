@@ -1,6 +1,6 @@
 [package]
 name = "attnres"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Attention Residuals (MoonshotAI/Kimi) implementation in Rust using burn"
 license = "MIT"
