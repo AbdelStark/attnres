@@ -6,18 +6,18 @@ attnres-rs: First Rust implementation of Attention Residuals (MoonshotAI/Kimi pa
 | Layer       | Technology    | Version  | Notes                                    |
 |-------------|---------------|----------|------------------------------------------|
 | Language    | Rust          | 1.80+    | Nightly recommended for some burn features |
-| ML Framework| burn          | latest   | tracel-ai/burn — multi-backend DL framework |
+| ML Framework| burn          | 0.20     | tracel-ai/burn — multi-backend DL framework |
 | Backends    | CUDA, Metal, wgpu, NdArray | — | NdArray for CPU testing, wgpu for cross-platform GPU |
 | Testing     | cargo test    | —        | + proptest (property-based), criterion (benchmarks) |
 | Serialization | safetensors | —       | For weight loading/saving                |
 | Linting     | clippy + rustfmt | —     | Enforced in CI                           |
-| CI          | GitHub Actions | —       | cargo test, clippy, fmt                  |
+| CI          | GitHub Actions | —       | cargo test, clippy, fmt, build-examples  |
 </stack>
 
 <status>
 PROJECT PHASE: Alpha (v0.1.0 — core algorithm implemented, tests passing).
-All source modules implemented. 52 tests passing (unit, differential, property-based, integration).
-CI configured (test, clippy, fmt, build-examples). Examples and benchmarks functional.
+All source modules implemented. 57 tests passing (28 inline unit + 18 external unit + 3 differential + 2 property + 5 integration + 1 doctest).
+CI configured (test, clippy, fmt, build-examples). Examples and benchmarks functional. burn upgraded to 0.20.
 Known gaps: no safetensors serialization, two-phase inference not integrated into main forward path, GPU backends untested.
 </status>
 
@@ -28,6 +28,8 @@ Current directory layout:
 attnres-rs/
 ├── Cargo.toml                      # Package manifest [agent: CREATE]
 ├── CLAUDE.md                       # This file
+├── AGENTS.md                       # AI agent technical context [agent: MODIFY]
+├── ROADMAP.md                      # Feature roadmap and progress [agent: MODIFY]
 ├── README.md                       # Project README [agent: MODIFY]
 ├── LICENSE                         # MIT [agent: READ ONLY]
 ├── spec.md                         # Technical specification [agent: READ ONLY — source of truth]
@@ -257,5 +259,8 @@ Available skills:
 
 <lessons_learned>
   — [Initial setup] This is a greenfield project. All implementation follows spec.md as the source of truth.
+  — [burn 0.16→0.20] Breaking API changes required updates to activation functions, loss computation, and tensor operations. Always check burn changelog when upgrading.
+  — [Testing] NdArray backend is deterministic and fast for small tensors. All tests use it. GPU backends remain untested.
+  — [Quality audit] Doc comments, config validation, and test coverage were hardened in a dedicated audit pass. Maintain this standard.
 </lessons_learned>
 </memory>
