@@ -1,13 +1,13 @@
 ---
 name: testing
-description: Testing strategy for attnres-rs covering unit tests, differential tests against PyTorch, property-based tests with proptest, integration tests, and criterion benchmarks. Activate when writing any test, debugging test failures, or validating algorithm correctness.
+description: Testing strategy for attnres covering unit tests, differential tests against PyTorch, property-based tests with proptest, integration tests, and criterion benchmarks. Activate when writing any test, debugging test failures, or validating algorithm correctness.
 prerequisites: cargo test, proptest crate, criterion crate
 ---
 
 # Testing
 
 <purpose>
-Defines the testing approach for attnres-rs. Covers five test categories, each with specific patterns and conventions. All tests use NdArray backend for determinism.
+Defines the testing approach for attnres. Covers five test categories, each with specific patterns and conventions. All tests use NdArray backend for determinism.
 </purpose>
 
 <context>

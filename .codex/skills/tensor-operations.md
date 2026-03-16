@@ -7,7 +7,7 @@ prerequisites: burn crate, understanding of AttnRes algorithm
 # Tensor Operations
 
 <purpose>
-Reference for the specific tensor operations used in attnres-rs. Maps paper equations to burn API calls with explicit shape annotations.
+Reference for the specific tensor operations used in attnres. Maps paper equations to burn API calls with explicit shape annotations.
 </purpose>
 
 <context>

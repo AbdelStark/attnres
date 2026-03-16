@@ -1,4 +1,4 @@
-# attnres-rs — Implementation Plan
+# attnres — Implementation Plan
 
 ## Phased Build Schedule
 
@@ -128,7 +128,7 @@
 
 - [ ] Final README polish
 - [ ] Add badges (CI, license, crates.io, docs.rs)
-- [ ] Create GitHub repo: `AbdelStark/attnres-rs`
+- [ ] Create GitHub repo: `AbdelStark/attnres`
 - [ ] Push code
 - [ ] Publish to crates.io: `cargo publish`
 - [ ] Generate docs: `cargo doc --open`, verify on docs.rs
@@ -148,7 +148,7 @@
   10. Links: repo, paper, crates.io
   11. Quote-tweet of @kimi_moonshot's announcement
 
-- [ ] Post to Hacker News: "Show HN: attnres-rs — Attention Residuals (Kimi) in Rust with Burn"
+- [ ] Post to Hacker News: "Show HN: attnres — Attention Residuals (Kimi) in Rust with Burn"
 - [ ] Post to Reddit: r/rust, r/MachineLearning
 - [ ] Post to LinkedIn (for AMI Labs visibility)
 - [ ] Share in burn framework Discord (they'll appreciate the showcase)
@@ -173,8 +173,8 @@
 
 ### Integration with Broader Ecosystem
 
-attnres-rs strengthens your portfolio:
-- **jepa-rs** uses standard ViT: attnres-rs could replace the residual connections
+attnres strengthens your portfolio:
+- **jepa-rs** uses standard ViT: attnres could replace the residual connections
 - **WorldForge** benefits from novel architectures in its provider models
 - **awesome-world-models** lists it as a Rust ML resource
 - **World Model Weekly** covers the paper and implementation

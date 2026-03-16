@@ -1,8 +1,8 @@
 //! WASM bindings for the Attention Residuals web demo.
 //!
 //! This is a faithful reimplementation of the core AttnRes algorithm from
-//! `attnres-rs`, written in pure Rust for guaranteed WASM compilation.
-//! Every function mirrors the corresponding attnres-rs source and cites
+//! `attnres`, written in pure Rust for guaranteed WASM compilation.
+//! Every function mirrors the corresponding attnres source and cites
 //! the paper equations it implements.
 //!
 //! Reference: "Attention as a Hypernetwork" (MoonshotAI/Kimi), Section 3.
@@ -22,6 +22,21 @@ pub struct ModelConfig {
     pub num_blocks: usize,
     pub num_heads: usize,
     pub vocab_size: usize,
+}
+
+#[derive(Serialize)]
+pub struct ModelInfo {
+    pub d_model: usize,
+    pub num_layers: usize,
+    pub num_blocks: usize,
+    pub num_heads: usize,
+    pub vocab_size: usize,
+    pub num_transformer_layers: usize,
+    pub block_size: usize,
+    pub is_full_attnres: bool,
+    pub d_ff: usize,
+    pub total_params: usize,
+    pub total_attnres_ops: usize,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -52,7 +67,7 @@ pub struct ComparisonResult {
 
 // ─── Core AttnRes Engine ───────────────────────────────────────────────
 
-/// Mirrors `attnres_rs::AttnResOp` — a single attention residual operation.
+/// Mirrors `attnres::AttnResOp` — a single attention residual operation.
 ///
 /// Source: `src/attn_res_op.rs`
 /// Paper: Equations 2-4
@@ -77,7 +92,7 @@ impl AttnResOp {
 
     /// Compute RMSNorm on a single vector.
     ///
-    /// Mirrors `attnres_rs::RmsNorm::forward`
+    /// Mirrors `attnres::RmsNorm::forward`
     /// Formula: RMSNorm(x) = (x / sqrt(mean(x²) + eps)) * gamma
     fn rms_norm(&self, x: &[f32]) -> Vec<f32> {
         let mean_sq: f32 = x.iter().map(|v| v * v).sum::<f32>() / x.len() as f32;
@@ -90,7 +105,7 @@ impl AttnResOp {
 
     /// Compute attention residual over block representations.
     ///
-    /// Mirrors `attnres_rs::AttnResOp::forward`
+    /// Mirrors `attnres::AttnResOp::forward`
     /// Source: `src/attn_res_op.rs:54-87`
     ///
     /// Algorithm (paper Eq. 2-4):
@@ -140,7 +155,7 @@ impl AttnResOp {
     }
 }
 
-/// Mirrors `attnres_rs::AttnResLayer` — a transformer layer with two AttnRes ops.
+/// Mirrors `attnres::AttnResLayer` — a transformer layer with two AttnRes ops.
 ///
 /// Source: `src/layer.rs`
 struct AttnResLayer {
@@ -164,7 +179,7 @@ impl AttnResLayer {
 
     /// Check if this layer starts a new block.
     ///
-    /// Mirrors `attnres_rs::AttnResLayer::is_at_boundary`
+    /// Mirrors `attnres::AttnResLayer::is_at_boundary`
     /// Source: `src/layer.rs:72-75`
     fn is_at_boundary(&self) -> bool {
         let half_block = self.block_size / 2;
@@ -173,7 +188,7 @@ impl AttnResLayer {
 
     /// Forward pass through this layer.
     ///
-    /// Mirrors `attnres_rs::AttnResLayer::forward`
+    /// Mirrors `attnres::AttnResLayer::forward`
     /// Source: `src/layer.rs:112-160`
     ///
     /// Returns: (updated_blocks, new_partial, attn_weights, mlp_weights)
@@ -478,19 +493,19 @@ impl AttnResEngine {
         let layer_params = 2 * (d * 2) + 2 * d + 4 * d * d + 2 * d * d_ff;
         let total = embed_params + num_tl * layer_params + d;
 
-        let info = serde_json::json!({
-            "d_model": d,
-            "num_layers": self.config.num_layers,
-            "num_blocks": self.config.num_blocks,
-            "num_heads": self.config.num_heads,
-            "vocab_size": v,
-            "num_transformer_layers": num_tl,
-            "block_size": block_size,
-            "is_full_attnres": self.config.num_blocks == self.config.num_layers,
-            "d_ff": d_ff,
-            "total_params": total,
-            "total_attnres_ops": num_tl * 2,
-        });
+        let info = ModelInfo {
+            d_model: d,
+            num_layers: self.config.num_layers,
+            num_blocks: self.config.num_blocks,
+            num_heads: self.config.num_heads,
+            vocab_size: v,
+            num_transformer_layers: num_tl,
+            block_size,
+            is_full_attnres: self.config.num_blocks == self.config.num_layers,
+            d_ff,
+            total_params: total,
+            total_attnres_ops: num_tl * 2,
+        };
 
         serde_wasm_bindgen::to_value(&info).map_err(|e| JsError::new(&e.to_string()))
     }

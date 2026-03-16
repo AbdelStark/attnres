@@ -1,4 +1,4 @@
-//! # attnres-rs
+//! # attnres
 //!
 //! First Rust implementation of Attention Residuals from the MoonshotAI/Kimi paper,
 //! built on the [burn](https://burn.dev) deep learning framework.
@@ -10,7 +10,7 @@
 //! ## Quick Start
 //!
 //! ```rust
-//! use attnres_rs::{AttnResConfig, AttnResTransformer};
+//! use attnres::{AttnResConfig, AttnResTransformer};
 //! use burn::prelude::*;
 //! use burn::backend::NdArray;
 //!

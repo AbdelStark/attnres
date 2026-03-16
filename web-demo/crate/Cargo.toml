@@ -2,7 +2,7 @@
 name = "attnres-wasm"
 version = "0.1.0"
 edition = "2021"
-description = "WASM bindings for the attnres-rs web demo — faithful reimplementation of the core Attention Residuals algorithm"
+description = "WASM bindings for the attnres web demo — faithful reimplementation of the core Attention Residuals algorithm"
 publish = false
 
 [lib]
@@ -11,7 +11,6 @@ crate-type = ["cdylib"]
 [dependencies]
 wasm-bindgen = "0.2"
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
 serde-wasm-bindgen = "0.6"
 js-sys = "0.3"
 console_error_panic_hook = "0.1"

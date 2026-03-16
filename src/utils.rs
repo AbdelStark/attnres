@@ -1,4 +1,4 @@
-/// Helper functions for the attnres-rs crate.
+/// Helper functions for the attnres crate.
 use burn::prelude::*;
 
 /// Create a causal attention mask [B, T, T].

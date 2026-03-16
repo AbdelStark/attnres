@@ -2,7 +2,7 @@
  * Attention Residuals — Interactive Web Demo
  *
  * Loads the attnres-wasm WASM module and drives all interactive
- * visualizations. Mirrors the attnres-rs crate's algorithm faithfully.
+ * visualizations. Mirrors the attnres crate's algorithm faithfully.
  */
 
 import init, { AttnResEngine } from "../crate/pkg/attnres_wasm.js";

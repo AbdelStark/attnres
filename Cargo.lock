@@ -166,10 +166,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "628d228f918ac3b82fe590352cc719d30664a0c13ca3a60266fe02c7132d480a"
 
 [[package]]
-name = "attnres-rs"
+name = "attnres"
 version = "0.1.0"
 dependencies = [
  "burn",
+ "burn-ndarray",
+ "burn-wgpu",
  "criterion",
  "proptest",
  "serde",

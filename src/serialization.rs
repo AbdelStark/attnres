@@ -15,7 +15,7 @@
 /// # Example
 ///
 /// ```rust,no_run
-/// use attnres_rs::{AttnResConfig, AttnResTransformer};
+/// use attnres::{AttnResConfig, AttnResTransformer};
 /// use burn::backend::NdArray;
 ///
 /// type B = NdArray;

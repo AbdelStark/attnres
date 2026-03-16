@@ -1,5 +1,5 @@
 <identity>
-attnres-rs: First Rust implementation of Attention Residuals (MoonshotAI/Kimi paper) using the burn deep learning framework. Drop-in replacement for standard residual connections in Transformers.
+attnres: First Rust implementation of Attention Residuals (MoonshotAI/Kimi paper) using the burn deep learning framework. Drop-in replacement for standard residual connections in Transformers.
 </identity>
 
 <stack>
@@ -27,7 +27,7 @@ Known gaps: no PyTorch checkpoint import, GPU backends untested.
 Current directory layout:
 
 ```
-attnres-rs/
+attnres/
 ├── Cargo.toml                      # Package manifest [agent: CREATE]
 ├── CLAUDE.md                       # This file
 ├── AGENTS.md                       # AI agent technical context [agent: MODIFY]
@@ -141,52 +141,10 @@ attnres-rs/
 </commit_conventions>
 </conventions>
 
-<workflows>
-<new_module>
-  1. Read spec.md for the module's specification (data structures, algorithm, equations)
-  2. Create src/module_name.rs with struct and impl
-  3. Add `pub mod module_name;` to src/lib.rs
-  4. Add public re-export to lib.rs if part of public API
-  5. Write inline unit tests in `#[cfg(test)] mod tests {}`
-  6. Run `cargo test` — all must pass
-  7. Run `cargo clippy -- -D warnings` — zero warnings
-  8. Run `cargo fmt` — ensure formatting
-</new_module>
-
-<implement_algorithm>
-  1. Read the relevant section in spec.md (contains Rust pseudocode with paper references)
-  2. Implement step-by-step, commenting each line with the paper equation it maps to
-  3. Add tensor shape annotations as comments on key operations
-  4. Write unit tests covering: correct output shape, known input/output pairs, edge cases
-  5. If differential test data exists in fixtures/, add a differential test
-</implement_algorithm>
-
-<add_test>
-  1. Determine test type: unit (tests/unit_tests.rs), property (tests/property_tests.rs), differential (tests/differential_tests.rs), integration (tests/integration_tests.rs)
-  2. Write test using NdArray backend (CPU, deterministic)
-  3. Use small dimensions for speed: d_model=64, seq_len=16, batch=2
-  4. Assert with tolerance for floating-point: `assert!((a - b).abs() < 1e-5)`
-  5. Run `cargo test test_name` to verify
-</add_test>
-
-<bug_fix>
-  1. Reproduce with a minimal test case
-  2. Check spec.md for the correct algorithm behavior
-  3. Compare implementation against paper pseudocode step-by-step
-  4. Fix and verify the test passes
-  5. Run full test suite to check for regressions
-</bug_fix>
-</workflows>
-
 <boundaries>
 <forbidden>
   DO NOT modify under any circumstances:
   — .env, .env.* (if created — credentials, API keys)
-  — LICENSE (legal document)
-  — spec.md (source of truth — treat as read-only reference)
-  — paper.md (reference material)
-  — research_report.md (reference material)
-  — implementation_plan.md (reference material)
 </forbidden>
 
 <gated>
@@ -225,61 +183,3 @@ These are the most important technical details from the paper. Getting ANY of th
 
 6. BLOCK BOUNDARIES: With L layers and N blocks, block_size = L/N. Block boundary occurs every block_size/2 transformer layers (because each transformer layer = 2 sublayers: attn + MLP).
 </critical_implementation_details>
-
-<troubleshooting>
-<known_issues>
-| Symptom                              | Cause                          | Fix                                    |
-|--------------------------------------|--------------------------------|----------------------------------------|
-| NaN in attention weights             | Missing RMSNorm before logits  | Ensure `self.norm.forward(v)` is called on values before dot product |
-| AttnRes output = simple mean         | Pseudo-queries still at zero   | Expected at init. Train for more steps to see differentiation |
-| Shape mismatch in Tensor::stack      | Blocks have inconsistent dims  | Verify all blocks are [B, T, D] before stacking |
-| Gradient explosion in deep models    | Missing zero-init on queries   | Set pseudo_query to `Tensor::zeros([d_model])` |
-| Block boundary off-by-one            | Incorrect layer_idx counting   | layer_idx is 0-based, boundary at `idx % (block_size/2) == 0` for idx > 0 |
-| Backend compilation errors           | Missing feature flags          | Check Cargo.toml features for the target backend |
-</known_issues>
-
-<recovery_patterns>
-  When stuck:
-  1. Read the error message — Rust errors are usually precise and actionable
-  2. Check spec.md for the algorithm specification
-  3. Verify tensor shapes at each step with shape annotations
-  4. Run `cargo test` on a minimal case to isolate the issue
-  5. Check burn documentation for API usage
-  6. If numerical issues, add debug prints of intermediate tensor values
-</recovery_patterns>
-</troubleshooting>
-
-<environment>
-  Harness: Claude Code / Claude Agent SDK
-  File system scope: Full project directory
-  Network access: Available (for cargo dependencies)
-  Tool access: git, cargo, shell
-  Human interaction: Synchronous chat
-</environment>
-
-<skills>
-Modular skills in .codex/skills/ (symlinked at .claude/skills/ and .agents/skills/).
-
-Available skills:
-— _index.md: Skill registry and discovery metadata
-— rust-burn-development.md: Burn framework patterns, module creation, backend handling
-— testing.md: Testing strategy — unit, differential, property-based, integration, benchmarks
-— debugging.md: Debugging tensor operations, numerical issues, burn-specific troubleshooting
-— tensor-operations.md: Tensor manipulation patterns for the AttnRes algorithm
-</skills>
-
-<memory>
-<project_decisions>
-  2026-03: Use burn over tch-rs — Multi-backend support (CUDA+Metal+wgpu+CPU), pure Rust, better ergonomics — Rejected: tch-rs (libtorch dependency), candle (less mature module system)
-  2026-03: Block AttnRes as primary variant — Paper shows it's more practical (lower overhead) while maintaining benefits — Rejected: Full AttnRes only (quadratic in layer count)
-  2026-03: Zero-init pseudo-queries — Paper requirement for training stability, ensures smooth transition from standard residuals — Rejected: Random init (causes training instability)
-  2026-03: NdArray backend for testing — Deterministic, no GPU needed, fast for small tensors — Rejected: wgpu for tests (slower startup, non-deterministic)
-</project_decisions>
-
-<lessons_learned>
-  — [Initial setup] This is a greenfield project. All implementation follows spec.md as the source of truth.
-  — [burn 0.16→0.20] Breaking API changes required updates to activation functions, loss computation, and tensor operations. Always check burn changelog when upgrading.
-  — [Testing] NdArray backend is deterministic and fast for small tensors. All tests use it. GPU backends remain untested.
-  — [Quality audit] Doc comments, config validation, and test coverage were hardened in a dedicated audit pass. Maintain this standard.
-</lessons_learned>
-</memory>

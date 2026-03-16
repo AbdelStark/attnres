@@ -7,7 +7,7 @@ prerequisites: Rust 1.80+, burn crate
 # Rust + Burn Development
 
 <purpose>
-Guides implementation of burn-based ML modules for the attnres-rs project. Covers Module/Config patterns, parameter initialization, backend generics, and burn API idioms.
+Guides implementation of burn-based ML modules for the attnres project. Covers Module/Config patterns, parameter initialization, backend generics, and burn API idioms.
 </purpose>
 
 <context>

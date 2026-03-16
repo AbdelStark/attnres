@@ -1,7 +1,7 @@
-/// Unit tests for attnres-rs core functionality.
+/// Unit tests for attnres core functionality.
 ///
 /// Tests the core algorithm components using NdArray backend.
-use attnres_rs::{AttnResConfig, AttnResTransformer, BlockState, RmsNorm, RmsNormConfig};
+use attnres::{AttnResConfig, AttnResTransformer, BlockState, RmsNorm, RmsNormConfig};
 use burn::backend::Autodiff;
 use burn::backend::NdArray;
 use burn::prelude::*;
@@ -225,7 +225,7 @@ fn test_model_with_causal_mask() {
         .with_vocab_size(50);
 
     let model = config.init_model::<TestBackend>(&device);
-    let mask = attnres_rs::causal_mask::<TestBackend>(2, 8, &device);
+    let mask = attnres::causal_mask::<TestBackend>(2, 8, &device);
     let input = Tensor::<TestBackend, 2, Int>::zeros([2, 8], &device);
     let out = model.forward(input, Some(&mask));
     assert_eq!(out.dims(), [2, 8, 50]);
@@ -340,7 +340,7 @@ fn test_rmsnorm_prevents_magnitude_domination() {
 fn test_two_phase_matches_standard_forward() {
     // Verify that phase1_batched + online_softmax_merge produces the same
     // result as the standard AttnResOp::forward.
-    use attnres_rs::two_phase::{compute_intra_logit, online_softmax_merge, phase1_batched};
+    use attnres::two_phase::{compute_intra_logit, online_softmax_merge, phase1_batched};
 
     let device = Default::default();
     let config = AttnResConfig::new(16, 4, 2);

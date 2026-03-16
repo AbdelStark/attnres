@@ -2,7 +2,7 @@
 ///
 /// These tests use fixtures generated from the paper's pseudocode to verify
 /// numerical correctness of the AttnRes implementation.
-use attnres_rs::AttnResConfig;
+use attnres::AttnResConfig;
 use burn::backend::NdArray;
 use burn::prelude::*;
 
@@ -37,7 +37,7 @@ fn test_differential_rmsnorm_known_input() {
     // RMS = sqrt(mean([1, 4, 9, 16])) = sqrt(7.5) ≈ 2.7386
     // Output ≈ [0.3651, 0.7303, 1.0954, 1.4606]
     let device = Default::default();
-    let norm = attnres_rs::RmsNormConfig::new(4).init::<TestBackend>(&device);
+    let norm = attnres::RmsNormConfig::new(4).init::<TestBackend>(&device);
 
     let x = Tensor::<TestBackend, 3>::from_floats([[[1.0, 2.0, 3.0, 4.0]]], &device);
     let out = norm.forward(x);

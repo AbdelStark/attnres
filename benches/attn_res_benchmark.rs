@@ -3,7 +3,7 @@
 //! Compares AttnRes forward pass performance at various model sizes.
 //! Run with: `cargo bench`
 
-use attnres_rs::{causal_mask, AttnResConfig, AttnResTransformer};
+use attnres::{causal_mask, AttnResConfig, AttnResTransformer};
 use burn::backend::NdArray;
 use burn::prelude::*;
 use burn::tensor::Distribution;

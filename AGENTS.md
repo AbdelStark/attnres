@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**attnres-rs** is the first Rust implementation of Attention Residuals (MoonshotAI/Kimi paper) using the [burn](https://github.com/tracel-ai/burn) deep learning framework. It provides a drop-in replacement for standard residual connections in Transformers.
+**attnres** is the first Rust implementation of Attention Residuals (MoonshotAI/Kimi paper) using the [burn](https://github.com/tracel-ai/burn) deep learning framework. It provides a drop-in replacement for standard residual connections in Transformers.
 
 ## Tech Stack
 

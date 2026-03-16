@@ -6,7 +6,7 @@
 //!
 //! Run with: `cargo run --example visualize_weights`
 
-use attnres_rs::{AttnResConfig, AttnResOp};
+use attnres::{AttnResConfig, AttnResOp};
 use burn::backend::NdArray;
 use burn::prelude::*;
 use burn::tensor::activation::softmax;

@@ -7,7 +7,7 @@
 //!
 //! Run with: `cargo run --example train_tiny`
 
-use attnres_rs::{causal_mask, AttnResConfig, AttnResTransformer};
+use attnres::{causal_mask, AttnResConfig, AttnResTransformer};
 use burn::backend::Autodiff;
 use burn::backend::NdArray;
 use burn::nn::loss::CrossEntropyLossConfig;

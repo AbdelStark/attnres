@@ -1,4 +1,4 @@
-# attnres-rs
+# attnres
 
 **The first Rust implementation of [Attention Residuals](https://github.com/MoonshotAI/Attention-Residuals) from MoonshotAI/Kimi.**
 
@@ -18,12 +18,12 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-attnres-rs = "0.1"
+attnres = "0.1"
 burn = { version = "0.20", features = ["ndarray"] }
 ```
 
 ```rust
-use attnres_rs::{AttnResConfig, AttnResTransformer};
+use attnres::{AttnResConfig, AttnResTransformer};
 use burn::prelude::*;
 use burn::backend::NdArray;
 

@@ -6,7 +6,7 @@
 //!
 //! Run with: `cargo run --example compare_residuals`
 
-use attnres_rs::{AttnResConfig, AttnResOp, AttnResTransformer, BlockState};
+use attnres::{AttnResConfig, AttnResOp, AttnResTransformer, BlockState};
 use burn::backend::NdArray;
 use burn::prelude::*;
 use burn::tensor::Distribution;

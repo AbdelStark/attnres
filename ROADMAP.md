@@ -1,4 +1,4 @@
-# attnres-rs Roadmap
+# attnres Roadmap
 
 ## Current Phase: Alpha (v0.2.0)
 

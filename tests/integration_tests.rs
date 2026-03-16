@@ -1,8 +1,8 @@
-/// Integration tests for attnres-rs.
+/// Integration tests for attnres.
 ///
 /// Tests end-to-end model behavior including forward passes,
 /// autodiff gradient flow, and model configuration.
-use attnres_rs::{causal_mask, AttnResConfig, AttnResTransformer};
+use attnres::{causal_mask, AttnResConfig, AttnResTransformer};
 use burn::backend::Autodiff;
 use burn::backend::NdArray;
 use burn::config::Config;

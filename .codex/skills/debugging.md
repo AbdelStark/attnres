@@ -1,13 +1,13 @@
 ---
 name: debugging
-description: Debugging guide for attnres-rs covering numerical issues (NaN, Inf, gradient explosion), tensor shape mismatches, burn framework errors, and algorithm correctness verification. Activate when encountering errors, unexpected outputs, or numerical instability.
+description: Debugging guide for attnres covering numerical issues (NaN, Inf, gradient explosion), tensor shape mismatches, burn framework errors, and algorithm correctness verification. Activate when encountering errors, unexpected outputs, or numerical instability.
 prerequisites: cargo test, understanding of spec.md
 ---
 
 # Debugging
 
 <purpose>
-Systematic debugging procedures for the attnres-rs codebase. Covers the most common failure modes in tensor-based ML code and burn-specific issues.
+Systematic debugging procedures for the attnres codebase. Covers the most common failure modes in tensor-based ML code and burn-specific issues.
 </purpose>
 
 <context>

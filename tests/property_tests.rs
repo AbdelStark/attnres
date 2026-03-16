@@ -1,7 +1,7 @@
-/// Property-based tests for attnres-rs using proptest.
+/// Property-based tests for attnres using proptest.
 ///
 /// Tests algebraic properties that must hold for any valid input.
-use attnres_rs::AttnResConfig;
+use attnres::AttnResConfig;
 use burn::backend::NdArray;
 use burn::prelude::*;
 use burn::tensor::Distribution;
