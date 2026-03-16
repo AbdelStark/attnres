@@ -1,0 +1,16 @@
+{
+  "description": "Reference outputs for AttnResOp forward pass with known inputs",
+  "note": "With zero-initialized pseudo-query, output equals mean of all sources",
+  "test_cases": [
+    {
+      "name": "two_blocks_zero_query",
+      "d_model": 4,
+      "blocks": [
+        [[1.0, 2.0, 3.0, 4.0]],
+        [[5.0, 6.0, 7.0, 8.0]]
+      ],
+      "partial": [[9.0, 10.0, 11.0, 12.0]],
+      "expected_output": [[5.0, 6.0, 7.0, 8.0]]
+    }
+  ]
+}
