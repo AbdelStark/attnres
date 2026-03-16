@@ -18,16 +18,18 @@ Core algorithm implemented and tested. Suitable for research and experimentation
 - [x] TwoPhase: Two-phase inference optimization (standalone)
 - [x] Config: Validated configuration with builder pattern
 - [x] Zero initialization of pseudo-query vectors
-- [x] 57 tests passing (unit, differential, property-based, integration, doctest)
 - [x] CI pipeline (test, clippy, fmt, build-examples)
 - [x] 3 examples (train_tiny, compare_residuals, visualize_weights)
 - [x] Criterion benchmarks
 - [x] Upgrade to burn 0.20
 
-## v0.2.0 — Serialization & Inference (Planned)
+## v0.2.0 — Serialization & Inference ✅
 
-- [ ] Safetensors weight save/load
-- [ ] Integrate two-phase inference into main forward path
+- [x] Model weight save/load (NamedMpk default, binary, compact/half-precision formats)
+- [x] Config save/load (JSON via burn's Config trait)
+- [x] Integrate two-phase inference into main `forward_two_phase` method
+- [x] Layer accessor methods for two-phase inference components
+- [x] 66 tests passing (unit, differential, property-based, integration, doctest)
 - [ ] Pre-trained weight loading from PyTorch checkpoints
 - [ ] Model export utilities
 

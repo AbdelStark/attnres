@@ -20,13 +20,14 @@
 ```
 src/
 ├── lib.rs              # Public API re-exports + module declarations
-├── config.rs           # AttnResConfig — validated builder pattern
+├── config.rs           # AttnResConfig — validated builder pattern (JSON save/load)
 ├── attn_res_op.rs      # Core AttnRes operation (depth-wise softmax attention)
 ├── block_state.rs      # BlockState — cumulative block representation tracking
 ├── layer.rs            # AttnResLayer — transformer layer with dual AttnRes
-├── model.rs            # AttnResTransformer — full model (embed → layers → LM head)
+├── model.rs            # AttnResTransformer — full model with standard + two-phase forward
 ├── rms_norm.rs         # RMSNorm implementation
-├── two_phase.rs        # Two-phase inference optimization
+├── serialization.rs    # Model weight save/load (NamedMpk, binary, compact formats)
+├── two_phase.rs        # Two-phase inference primitives (phase1_batched, online_softmax_merge)
 ├── attention.rs        # Multi-head self-attention
 ├── feed_forward.rs     # SwiGLU-style MLP
 └── utils.rs            # Causal mask generation helpers
@@ -54,7 +55,7 @@ fixtures/                # Reference outputs from PyTorch
 
 ```bash
 cargo build                        # Build the project
-cargo test --all-features          # Run all 57 tests
+cargo test --all-features          # Run all 66 tests
 cargo test test_name               # Run specific test
 cargo clippy -- -D warnings        # Lint (warnings = errors)
 cargo fmt                          # Format code
@@ -112,7 +113,7 @@ Input IDs → Embedding → [AttnResLayer × N] → RMSNorm → LM Head → Logi
 
 ## Known Gaps
 
-- No safetensors serialization
-- Two-phase inference not integrated into main forward path
+- No PyTorch checkpoint loading (safetensors format)
 - GPU backends (wgpu, CUDA, Metal) untested
 - No distributed training support
+- Pre-trained weight import/export utilities

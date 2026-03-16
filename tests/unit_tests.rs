@@ -4,7 +4,6 @@
 use attnres_rs::{AttnResConfig, AttnResTransformer, BlockState, RmsNorm, RmsNormConfig};
 use burn::backend::Autodiff;
 use burn::backend::NdArray;
-use burn::optim;
 use burn::prelude::*;
 use burn::tensor::activation::softmax;
 use burn::tensor::Distribution;

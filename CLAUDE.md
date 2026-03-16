@@ -9,16 +9,18 @@ attnres-rs: First Rust implementation of Attention Residuals (MoonshotAI/Kimi pa
 | ML Framework| burn          | 0.20     | tracel-ai/burn — multi-backend DL framework |
 | Backends    | CUDA, Metal, wgpu, NdArray | — | NdArray for CPU testing, wgpu for cross-platform GPU |
 | Testing     | cargo test    | —        | + proptest (property-based), criterion (benchmarks) |
-| Serialization | safetensors | —       | For weight loading/saving                |
+| Serialization | burn record (NamedMpk, bin) | — | Model weight save/load via burn's record system |
 | Linting     | clippy + rustfmt | —     | Enforced in CI                           |
 | CI          | GitHub Actions | —       | cargo test, clippy, fmt, build-examples  |
 </stack>
 
 <status>
-PROJECT PHASE: Alpha (v0.1.0 — core algorithm implemented, tests passing).
-All source modules implemented. 57 tests passing (28 inline unit + 18 external unit + 3 differential + 2 property + 5 integration + 1 doctest).
-CI configured (test, clippy, fmt, build-examples). Examples and benchmarks functional. burn upgraded to 0.20.
-Known gaps: no safetensors serialization, two-phase inference not integrated into main forward path, GPU backends untested.
+PROJECT PHASE: v0.2.0 — serialization and two-phase inference integrated.
+All source modules implemented. 66 tests passing (32 inline unit + 18 external unit + 3 differential + 2 property + 9 integration + 2 doctest).
+CI configured (test, clippy, fmt, build-examples). Examples and benchmarks functional. burn 0.20.
+Model save/load via burn record system (NamedMpk, binary, compact). Config save/load via JSON.
+Two-phase inference integrated into model via `forward_two_phase` method.
+Known gaps: no PyTorch checkpoint import, GPU backends untested.
 </status>
 
 <structure>
@@ -44,6 +46,7 @@ attnres-rs/
 │   ├── layer.rs                    # AttnResLayer [agent: CREATE/MODIFY]
 │   ├── model.rs                    # AttnResTransformer [agent: CREATE/MODIFY]
 │   ├── rms_norm.rs                 # RMSNorm implementation [agent: CREATE/MODIFY]
+│   ├── serialization.rs            # Model weight save/load [agent: CREATE/MODIFY]
 │   ├── two_phase.rs                # Two-phase inference [agent: CREATE/MODIFY]
 │   ├── attention.rs                # Multi-head attention [agent: CREATE/MODIFY]
 │   ├── feed_forward.rs             # MLP module [agent: CREATE/MODIFY]

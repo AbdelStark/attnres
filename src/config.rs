@@ -3,6 +3,9 @@
 /// `num_layers` counts *sublayers* — each transformer layer has 2 sublayers
 /// (attention + MLP), so `num_layers=8` creates 4 transformer layers.
 ///
+/// Supports JSON serialization via [`save`](AttnResConfig::save) and
+/// [`load`](AttnResConfig::load) methods.
+///
 /// Paper reference: Section 3, Block Attention Residuals.
 use burn::config::Config;
 
@@ -175,6 +178,31 @@ mod tests {
     fn test_num_transformer_layers() {
         let config = AttnResConfig::new(64, 12, 4);
         assert_eq!(config.num_transformer_layers(), 6);
+    }
+
+    #[test]
+    fn test_config_save_load_roundtrip() {
+        let config = AttnResConfig::new(128, 24, 8)
+            .with_num_heads(8)
+            .with_d_ff(512)
+            .with_vocab_size(50000)
+            .with_dropout(0.1);
+
+        let path = std::env::temp_dir().join("attnres_test_config.json");
+        config.save(&path).expect("Failed to save config");
+
+        let loaded = AttnResConfig::load(&path).expect("Failed to load config");
+
+        assert_eq!(config.d_model, loaded.d_model);
+        assert_eq!(config.num_layers, loaded.num_layers);
+        assert_eq!(config.num_blocks, loaded.num_blocks);
+        assert_eq!(config.num_heads, loaded.num_heads);
+        assert_eq!(config.d_ff, loaded.d_ff);
+        assert_eq!(config.vocab_size, loaded.vocab_size);
+        assert!((config.dropout - loaded.dropout).abs() < 1e-10);
+        assert!((config.rms_norm_eps - loaded.rms_norm_eps).abs() < 1e-15);
+
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]

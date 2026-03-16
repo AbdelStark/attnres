@@ -58,6 +58,47 @@ impl AttnResConfig {
 }
 
 impl<B: Backend> AttnResLayer<B> {
+    /// Get the layer index.
+    pub fn layer_idx(&self) -> usize {
+        self.layer_idx
+    }
+
+    /// Get the block size.
+    pub fn block_size(&self) -> usize {
+        self.block_size
+    }
+
+    /// Check if this layer is at a block boundary.
+    pub fn is_at_boundary(&self) -> bool {
+        let half_block = self.block_size / 2;
+        self.layer_idx > 0 && (half_block == 0 || self.layer_idx.is_multiple_of(half_block))
+    }
+
+    /// Get references to the AttnRes operations (attn_res, mlp_res).
+    pub fn attn_res_ops(&self) -> (&AttnResOp<B>, &AttnResOp<B>) {
+        (&self.attn_res, &self.mlp_res)
+    }
+
+    /// Execute only the attention sublayer (norm + multi-head attention).
+    ///
+    /// Used by two-phase inference after AttnRes has been computed externally.
+    pub fn forward_attn_sublayer(
+        &self,
+        h: Tensor<B, 3>,
+        mask: Option<&Tensor<B, 3>>,
+    ) -> Tensor<B, 3> {
+        let normed = self.attn_norm.forward(h);
+        self.attn.forward(normed, mask)
+    }
+
+    /// Execute only the MLP sublayer (norm + feed-forward).
+    ///
+    /// Used by two-phase inference after AttnRes has been computed externally.
+    pub fn forward_mlp_sublayer(&self, h: Tensor<B, 3>) -> Tensor<B, 3> {
+        let normed = self.mlp_norm.forward(h);
+        self.mlp.forward(normed)
+    }
+
     /// Forward pass for a single transformer layer with Block AttnRes.
     ///
     /// Maps directly to the `forward` function in Figure 2 of the paper.
