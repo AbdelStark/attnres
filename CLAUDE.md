@@ -183,3 +183,33 @@ These are the most important technical details from the paper. Getting ANY of th
 
 6. BLOCK BOUNDARIES: With L layers and N blocks, block_size = L/N. Block boundary occurs every block_size/2 transformer layers (because each transformer layer = 2 sublayers: attn + MLP).
 </critical_implementation_details>
+
+<design_context>
+## Web Demo Design Context
+
+### Users
+ML researchers and enthusiasts exploring the Attention Residuals paper interactively. Secondary audience: Rust developers evaluating the library. Users arrive with mathematical fluency and want to build intuition for how depth attention weights evolve — not to be sold on the concept.
+
+### Brand Personality
+**Rigorous, clean, precise.** The demo is a companion to an academic paper. Every visual choice should reinforce credibility and clarity. The interface should feel like a well-typeset paper with interactive figures, not a product.
+
+### Aesthetic Direction
+- **Visual tone**: Academic monochrome with a single blue accent. Restrained, high-contrast, typography-forward.
+- **Typography**: Source Serif 4 (headings — paper feel), Inter (body — readability), JetBrains Mono (data/code — precision).
+- **Palette**: Monochrome grays + blue (#2563eb light / #60a5fa dark). No multi-color branding.
+- **Theme**: Light + dark via `prefers-color-scheme`. Both must be first-class.
+- **Anti-references**:
+  - NOT a marketing landing page (no hero CTAs, testimonials, pricing, sales copy)
+  - NOT a generic AI/ML demo (no neon gradients, dark-mode-only gamer aesthetic, "powered by AI" badges)
+  - NOT a Jupyter notebook (no raw code cells, unstyled outputs, or academic ugliness)
+
+### Design Principles
+1. **Let the math speak.** Visualizations and equations are the content. Chrome should be invisible.
+2. **Credibility through restraint.** One accent color. No decorative elements. Every pixel earns its place.
+3. **Progressive disclosure.** Start simple (uniform weights), reveal complexity (training simulation) on interaction.
+4. **Dark mode is not an afterthought.** Both themes use perceptually appropriate palettes, not inverted colors.
+5. **Accessible at WCAG AA.** 4.5:1 contrast minimums, keyboard navigation, screen reader basics. Canvas visualizations should have text alternatives.
+
+### Design Tokens (established)
+All colors, spacing, typography, shadows, and motion are defined as CSS custom properties in `web-demo/src/style.css:3-63`. Canvas drawing code should read these tokens at runtime via `getComputedStyle()` rather than hard-coding hex values.
+</design_context>
