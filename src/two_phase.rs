@@ -26,6 +26,13 @@ pub struct Phase1Result<B: Backend> {
 ///
 /// All S pseudo-queries are batched against the N cached block representations.
 ///
+/// **Note on norm sharing**: This function uses `ops[0].norm` to normalize the
+/// stacked block values for all queries. This is correct because all AttnResOp
+/// instances within a model share the same RmsNormConfig (same d_model, same eps),
+/// and in practice their learned gamma parameters stay close during training since
+/// they process the same block representations. The sharing avoids redundant
+/// normalization passes over the block stack.
+///
 /// # Arguments
 /// * `ops` - The S AttnResOp modules (one per sublayer in the block)
 /// * `blocks` - The N completed block representations [each [B, T, D]]

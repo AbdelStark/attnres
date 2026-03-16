@@ -22,6 +22,10 @@ pub struct MultiHeadAttentionConfig {
 }
 
 impl MultiHeadAttentionConfig {
+    /// Initialize multi-head attention with Q/K/V/O projections.
+    ///
+    /// # Panics
+    /// Panics if `d_model` is not divisible by `num_heads`.
     pub fn init<B: Backend>(&self, device: &B::Device) -> MultiHeadAttention<B> {
         assert!(
             self.d_model.is_multiple_of(self.num_heads),

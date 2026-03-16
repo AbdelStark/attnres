@@ -68,7 +68,7 @@ web-demo/                # Interactive web demo (WASM + Vite)
 
 ```bash
 cargo build                        # Build the project
-cargo test --all-features          # Run all 84 tests
+cargo test --all-features          # Run all 87 tests
 cargo test test_name               # Run specific test
 cargo clippy -- -D warnings        # Lint (warnings = errors)
 cargo fmt                          # Format code

@@ -31,6 +31,10 @@ pub struct AttnResOp<B: Backend> {
 
 impl AttnResConfig {
     /// Initialize a single AttnResOp with zero pseudo-query.
+    ///
+    /// The pseudo-query is zero-initialized per the paper's requirement for
+    /// training stability. This means the operation starts as uniform averaging
+    /// over all sources (equivalent to standard residual connections).
     pub fn init_op<B: Backend>(&self, device: &B::Device) -> AttnResOp<B> {
         AttnResOp {
             // CRITICAL: zero initialization per paper requirement

@@ -39,6 +39,12 @@ pub struct AttnResLayer<B: Backend> {
 
 impl AttnResConfig {
     /// Initialize a single AttnResLayer.
+    ///
+    /// # Arguments
+    /// * `layer_idx` - Zero-based index of this transformer layer. Used to
+    ///   determine block boundaries (boundary occurs when `layer_idx > 0` and
+    ///   `layer_idx % (block_size / 2) == 0`).
+    /// * `device` - Device to allocate tensors on.
     pub fn init_layer<B: Backend>(&self, layer_idx: usize, device: &B::Device) -> AttnResLayer<B> {
         AttnResLayer {
             layer_idx,

@@ -16,7 +16,7 @@ attnres-rs: First Rust implementation of Attention Residuals (MoonshotAI/Kimi pa
 
 <status>
 PROJECT PHASE: v0.2.0 — serialization and two-phase inference integrated.
-All source modules implemented. 66 tests passing (32 inline unit + 18 external unit + 3 differential + 2 property + 9 integration + 2 doctest).
+All source modules implemented. 87 tests passing (35 inline unit + 34 external unit + 3 differential + 4 property + 9 integration + 2 doctest).
 CI configured (test, clippy, fmt, build-examples). Examples and benchmarks functional. burn 0.20.
 Model save/load via burn record system (NamedMpk, binary, compact). Config save/load via JSON.
 Two-phase inference integrated into model via `forward_two_phase` method.
@@ -32,6 +32,7 @@ attnres-rs/
 ├── CLAUDE.md                       # This file
 ├── AGENTS.md                       # AI agent technical context [agent: MODIFY]
 ├── ROADMAP.md                      # Feature roadmap and progress [agent: MODIFY]
+├── CHANGELOG.md                    # Release history [agent: MODIFY]
 ├── README.md                       # Project README [agent: MODIFY]
 ├── LICENSE                         # MIT [agent: READ ONLY]
 ├── spec.md                         # Technical specification [agent: READ ONLY — source of truth]
