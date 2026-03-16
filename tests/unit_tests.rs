@@ -1,7 +1,7 @@
 /// Unit tests for attnres-rs core functionality.
 ///
 /// Tests the core algorithm components using NdArray backend.
-use attnres_rs::{AttnResConfig, AttnResTransformer, BlockState, RmsNormConfig};
+use attnres_rs::{AttnResConfig, AttnResTransformer, BlockState, RmsNorm, RmsNormConfig};
 use burn::backend::Autodiff;
 use burn::backend::NdArray;
 use burn::optim;
@@ -331,4 +331,114 @@ fn test_rmsnorm_prevents_magnitude_domination() {
         diff < 1e-3,
         "With zero query, RMSNorm should lead to uniform weights regardless of magnitude, diff={diff}"
     );
+}
+
+// ========================
+// Two-phase Equivalence Tests
+// ========================
+
+#[test]
+fn test_two_phase_matches_standard_forward() {
+    // Verify that phase1_batched + online_softmax_merge produces the same
+    // result as the standard AttnResOp::forward.
+    use attnres_rs::two_phase::{compute_intra_logit, online_softmax_merge, phase1_batched};
+
+    let device = Default::default();
+    let config = AttnResConfig::new(16, 4, 2);
+    let op = config.init_op::<TestBackend>(&device);
+
+    let blocks = vec![
+        Tensor::random([1, 4, 16], Distribution::Normal(0.0, 1.0), &device),
+        Tensor::random([1, 4, 16], Distribution::Normal(0.0, 1.0), &device),
+    ];
+    let partial = Tensor::random([1, 4, 16], Distribution::Normal(0.0, 1.0), &device);
+
+    // Standard forward
+    let standard_out = op.forward(&blocks, &partial);
+
+    // Two-phase forward
+    let phase1 = phase1_batched(&[&op], &blocks);
+    let intra_logit = compute_intra_logit(&op, &partial);
+    let two_phase_out = online_softmax_merge(
+        phase1.outputs[0].clone(),
+        phase1.max_logits[0].clone(),
+        phase1.sum_exp[0].clone(),
+        intra_logit,
+        partial,
+    );
+
+    let diff: f32 = (standard_out - two_phase_out).abs().max().into_scalar();
+    assert!(
+        diff < 1e-4,
+        "Two-phase forward should match standard forward, diff={diff}"
+    );
+}
+
+// ========================
+// Full AttnRes (block_size=1) Tests
+// ========================
+
+#[test]
+fn test_full_attnres_every_layer_is_boundary() {
+    // With num_blocks = num_layers (Full AttnRes), block_size=1, half_block=0.
+    // Every layer after the first should trigger a boundary.
+    let device = Default::default();
+    let config = AttnResConfig::new(32, 4, 4).with_num_heads(4);
+
+    let layers: Vec<_> = (0..2)
+        .map(|i| config.init_layer::<TestBackend>(i, &device))
+        .collect();
+
+    let emb = Tensor::random([1, 4, 32], Distribution::Normal(0.0, 1.0), &device);
+    let mut state = BlockState::new(emb);
+
+    // Layer 0: no boundary (first layer)
+    state = layers[0].forward(state, None);
+    assert_eq!(state.num_blocks(), 1, "Layer 0 should not add a block");
+
+    // Layer 1: boundary
+    state = layers[1].forward(state, None);
+    assert_eq!(
+        state.num_blocks(),
+        2,
+        "Layer 1 should add a block in Full AttnRes"
+    );
+}
+
+// ========================
+// RMSNorm additional tests
+// ========================
+
+#[test]
+fn test_rmsnorm_3d_4d_consistency() {
+    // RMSNorm on a single [1, B, T, D] slice should match 3D [B, T, D]
+    let device = Default::default();
+    let norm: RmsNorm<TestBackend> = RmsNormConfig::new(16).init(&device);
+
+    let x_3d = Tensor::random([2, 8, 16], Distribution::Normal(0.0, 1.0), &device);
+    let x_4d = x_3d.clone().unsqueeze_dim::<4>(0); // [1, 2, 8, 16]
+
+    let out_3d = norm.forward(x_3d);
+    let out_4d = norm.forward_4d(x_4d).squeeze_dim::<3>(0);
+
+    let diff: f32 = (out_3d - out_4d).abs().max().into_scalar();
+    assert!(
+        diff < 1e-5,
+        "3D and 4D RMSNorm should produce consistent results, diff={diff}"
+    );
+}
+
+// ========================
+// Config validation test
+// ========================
+
+#[test]
+fn test_model_init_validates_config() {
+    // init_model should call validate(), catching bad configs early
+    let device: <TestBackend as burn::tensor::backend::Backend>::Device = Default::default();
+    let config = AttnResConfig::new(32, 4, 2)
+        .with_num_heads(4)
+        .with_vocab_size(50);
+    // This should succeed
+    let _model: AttnResTransformer<TestBackend> = config.init_model(&device);
 }

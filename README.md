@@ -14,20 +14,88 @@ Standard residual connections accumulate all layer outputs with fixed unit weigh
 
 ## Quick Start
 
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+attnres-rs = "0.1"
+burn = { version = "0.20", features = ["ndarray"] }
+```
+
 ```rust
 use attnres_rs::{AttnResConfig, AttnResTransformer};
+use burn::prelude::*;
 use burn::backend::NdArray;
 
-let config = AttnResConfig::new(768, 24, 8);  // d=768, 24 layers, 8 blocks
-let model: AttnResTransformer<NdArray> = config.init(&device);
-let output = model.forward(input_ids, Some(&mask));
+type B = NdArray;
+
+let device = Default::default();
+let config = AttnResConfig::new(128, 8, 2)  // d_model=128, 8 sublayers (4 transformer layers), 2 blocks
+    .with_num_heads(4)
+    .with_vocab_size(1000);
+
+let model: AttnResTransformer<B> = config.init_model(&device);
+let input_ids = Tensor::<B, 2, Int>::zeros([1, 16], &device);
+let logits = model.forward(input_ids, None);
+// logits shape: [1, 16, 1000]
 ```
+
+## Key Concepts
+
+- **Block AttnRes**: Groups layers into N blocks and computes depth attention over block representations. More practical than Full AttnRes (lower overhead).
+- **Full AttnRes**: Set `num_blocks = num_layers` for per-layer depth attention.
+- **Zero initialization**: Pseudo-query vectors start at zero, so AttnRes begins as standard residual (uniform averaging) and gradually differentiates during training.
+- **Two AttnRes per layer**: Each transformer layer applies AttnRes before both the self-attention and MLP sublayers.
+
+## Architecture
+
+```
+AttnResTransformer
+  ├── Embedding
+  ├── AttnResLayer (x num_transformer_layers)
+  │     ├── AttnResOp (before self-attention)
+  │     ├── RmsNorm + MultiHeadAttention
+  │     ├── AttnResOp (before MLP)
+  │     └── RmsNorm + FeedForward
+  ├── Final RmsNorm
+  └── LM Head (Linear)
+```
+
+**Note on `num_layers`**: This parameter counts *sublayers* (each transformer layer = 2 sublayers: attention + MLP). So `num_layers=8` means 4 transformer layers.
+
+## Examples
+
+```bash
+cargo run --example train_tiny          # Train a small model on synthetic data
+cargo run --example compare_residuals   # Compare AttnRes vs standard residuals
+cargo run --example visualize_weights   # Visualize depth attention patterns
+```
+
+## Development
+
+```bash
+cargo build                        # Build
+cargo test --all-features          # Run all tests
+cargo clippy -- -D warnings        # Lint
+cargo fmt                          # Format
+cargo bench                        # Benchmarks
+```
+
+## Current Status
+
+**Alpha** (v0.1.0). Core algorithm implemented and tested. Suitable for research and experimentation. Not yet suitable for production training at scale.
+
+Known limitations:
+- No weight serialization/loading (safetensors support planned)
+- Two-phase inference optimization is implemented but not integrated into the main forward pass
+- NdArray backend only tested; GPU backends untested
+- No distributed training support
 
 ## Paper
 
-> **Attention Residuals** — Kimi Team (MoonshotAI), 2026
-> [Paper PDF](https://github.com/MoonshotAI/Attention-Residuals/blob/master/Attention_Residuals.pdf) | [Official Repo](https://github.com/MoonshotAI/Attention-Residuals) | [Announcement Tweet](https://x.com/kimi_moonshot/status/2033378587878072424)
+> **Attention Residuals** -- Kimi Team (MoonshotAI), 2026
+> [Paper PDF](https://github.com/MoonshotAI/Attention-Residuals/blob/master/Attention_Residuals.pdf) | [Official Repo](https://github.com/MoonshotAI/Attention-Residuals)
 
 ## License
 
-Apache 2.0
+MIT

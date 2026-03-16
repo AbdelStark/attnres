@@ -27,10 +27,13 @@ pub struct AttnResTransformer<B: Backend> {
 
 impl AttnResConfig {
     /// Initialize the full AttnRes Transformer model.
+    ///
+    /// # Panics
+    /// Panics if the configuration is invalid (see [`AttnResConfig::validate`]).
     pub fn init_model<B: Backend>(&self, device: &B::Device) -> AttnResTransformer<B> {
-        // Number of transformer layers = num_layers / 2
-        // (num_layers counts sublayers: each transformer layer = attn + MLP = 2 sublayers)
-        let num_transformer_layers = self.num_layers / 2;
+        self.validate();
+
+        let num_transformer_layers = self.num_transformer_layers();
 
         let layers = (0..num_transformer_layers)
             .map(|i| self.init_layer(i, device))
@@ -73,7 +76,9 @@ impl<B: Backend> AttnResTransformer<B> {
         }
 
         // 4. Get final hidden states from partial block
-        let output = state.partial_block.expect("Model should produce output");
+        let output = state
+            .partial_block
+            .expect("partial_block missing after forward pass; this is a bug in AttnResLayer");
 
         // 5. Final norm + LM head
         let normed = self.final_norm.forward(output);
@@ -93,7 +98,9 @@ impl<B: Backend> AttnResTransformer<B> {
             state = layer.forward(state, mask);
         }
 
-        let output = state.partial_block.expect("Model should produce output");
+        let output = state
+            .partial_block
+            .expect("partial_block missing after forward pass; this is a bug in AttnResLayer");
         self.final_norm.forward(output)
     }
 }
