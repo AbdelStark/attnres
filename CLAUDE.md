@@ -63,8 +63,20 @@ attnres-rs/
 │   ├── train_tiny.rs               # Training example [agent: CREATE/MODIFY]
 │   ├── compare_residuals.rs        # Standard vs AttnRes [agent: CREATE/MODIFY]
 │   └── visualize_weights.rs        # Depth attention visualization [agent: CREATE/MODIFY]
-└── benches/
-    └── attn_res_benchmark.rs       # Criterion benchmarks [agent: CREATE/MODIFY]
+├── benches/
+│   └── attn_res_benchmark.rs       # Criterion benchmarks [agent: CREATE/MODIFY]
+└── web-demo/                        # Interactive browser demo [agent: CREATE/MODIFY]
+    ├── crate/                       # Pure-Rust WASM crate (AttnRes reimplementation)
+    │   ├── Cargo.toml
+    │   └── src/lib.rs               # wasm-bindgen exports
+    ├── src/                         # TypeScript frontend
+    │   ├── main.ts                  # App entry + controls
+    │   ├── style.css                # Academic-grade CSS
+    │   ├── viz.ts                   # Canvas heatmaps/charts
+    │   └── diagrams.ts              # Static diagrams
+    ├── index.html                   # SPA entry point
+    ├── package.json                 # npm scripts (build:wasm, dev, build)
+    └── vite.config.ts               # Vite build config
 ```
 </structure>
 
@@ -81,6 +93,9 @@ attnres-rs/
 | Bench            | `cargo bench`                    | Criterion benchmarks               |
 | Run example      | `cargo run --example train_tiny` | CPU (ndarray) by default           |
 | Publish          | `cargo publish`                  | ⚠ REQUIRES APPROVAL               |
+| Web demo (WASM)  | `cd web-demo && npm run build:wasm` | Requires wasm-pack + wasm32 target |
+| Web demo (dev)   | `cd web-demo && npm run dev`     | Vite dev server at localhost:5173  |
+| Web demo (build) | `cd web-demo && npm run build`   | Production build (WASM + Vite)     |
 </commands>
 
 <conventions>

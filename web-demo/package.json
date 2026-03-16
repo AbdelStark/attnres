@@ -1,0 +1,16 @@
+{
+  "name": "attnres-web-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:wasm": "cd crate && wasm-pack build --target web --release",
+    "dev": "vite",
+    "build": "npm run build:wasm && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0"
+  }
+}

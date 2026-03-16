@@ -36,3 +36,9 @@ Thumbs.db
 
 # Criterion benchmark output
 target/criterion/
+
+# Web demo build artifacts
+web-demo/node_modules/
+web-demo/dist/
+web-demo/crate/target/
+web-demo/crate/pkg/
