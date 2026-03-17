@@ -43,11 +43,12 @@ Known limitations:
 - CI exercises the NdArray backend; GPU backends compile via burn but are not
   validated here.
 - No PyTorch or `safetensors` checkpoint import/export.
-- `src/kimi/` currently implements only RFC 0001 Phase A artifact-understanding
-  surfaces: typed config parsing, typed layer schedules, shard-index metadata,
-  and import planning/report scaffolding.
-- No runnable baseline Kimi Linear model, sharded checkpoint loader, parity
-  harness, or AttnRes-Kimi execution path is shipped yet.
+- `src/kimi/` implements RFC 0001 Phase A artifact-understanding surfaces plus
+  RFC 0002 baseline Kimi Linear scaffolding: typed MLA/KDA layer selection,
+  dense-vs-MoE placement, separate MLA/KDA cache families, and random-init
+  token-ID forward paths on reduced configs.
+- No sharded checkpoint loader, reference-parity harness, or AttnRes-Kimi
+  execution path is shipped yet.
 - No compatibility promise for a stable 1.0 public API yet.
 - No dedicated formal spec document is checked into this repository today.
 
@@ -122,7 +123,8 @@ Repository map:
 - `src/model.rs`: end-to-end model and two-phase forward path.
 - `src/two_phase.rs`: the paper's two-phase inference primitives.
 - `src/serialization.rs`: save/load helpers for burn record formats.
-- `src/kimi/`: RFC 0001 Phase A Kimi artifact-understanding scaffolding only.
+- `src/kimi/`: RFC 0001 artifact understanding plus RFC 0002 baseline Kimi
+  architecture scaffolding.
 - `tests/`: unit, integration, property, and differential coverage.
 - `web-demo/`: WASM crate plus a Vite front-end.
 
@@ -137,8 +139,11 @@ support" claim.
 - Phase A: artifact understanding. Implemented in this checkout via
   `attnres::kimi` typed config, layer-schedule, shard-index, and import
   planning/report APIs.
-- Phase B: baseline Kimi implementation. Deferred.
-- Phase C: baseline parity. Deferred.
+- Phase B: baseline Kimi implementation. Implemented in this checkout as
+  architecture scaffolding: `KimiLinearModel`, schedule-driven MLA/KDA module
+  selection, dense-vs-MoE placement, and separate decode-cache state types.
+- Phase C: baseline parity. Deferred, along with RFC 0003 checkpoint import and
+  later validation work.
 - Phase D: AttnRes-Kimi integration. Deferred.
 - Phase E: benchmarks and research validation. Deferred.
 

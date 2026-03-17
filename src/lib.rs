@@ -7,9 +7,10 @@
 //! with learned softmax attention over depth, enabling selective information routing
 //! across layers.
 //!
-//! The crate also exposes a separate `kimi` module tree for RFC 0001 staging.
-//! That surface currently stops at Phase A artifact understanding and does not
-//! yet provide runnable Kimi execution or checkpoint loading.
+//! The crate also exposes a separate `kimi` module tree for the staged Kimi
+//! milestone. This checkout includes RFC 0001 artifact understanding and RFC
+//! 0002 baseline Kimi Linear execution scaffolding, but checkpoint import,
+//! reference parity, and AttnRes-Kimi remain deferred.
 //!
 //! ## Quick Start
 //!

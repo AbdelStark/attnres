@@ -12,6 +12,7 @@ fn sample_config_json() -> String {
     r#"{
         "model_type": "kimi_linear",
         "dtype": "bfloat16",
+        "vocab_size": 32000,
         "hidden_size": 2304,
         "intermediate_size": 9216,
         "moe_intermediate_size": 1024,
@@ -33,6 +34,7 @@ fn sample_config_json() -> String {
         "num_shared_experts": 1,
         "tie_word_embeddings": false,
         "use_cache": true,
+        "rms_norm_eps": 1e-6,
         "linear_attn_config": {
             "full_attn_layers": [4],
             "kda_layers": [1, 2, 3],
@@ -217,9 +219,9 @@ fn slice_plan_is_explicitly_deferred_after_selection_validation() {
         err,
         KimiImportError::ModeNotYetImplemented {
             mode: KimiImportMode::Slice,
-            implemented_phase: KimiMilestonePhase::ArtifactUnderstanding,
+            implemented_phase: KimiMilestonePhase::BaselineImplementation,
             required_phase: KimiMilestonePhase::BaselineImplementation,
-            detail: "tensor-to-module mapping and shard slicing are deferred to RFC 0002/0003"
+            detail: "baseline execution exists, but tensor-to-module mapping and shard slicing remain deferred to RFC 0003"
         }
     );
 }

@@ -44,5 +44,12 @@ impl Display for KimiMilestonePhase {
     }
 }
 
-/// Current repository-backed Kimi slice.
-pub const KIMI_IMPLEMENTED_PHASE: KimiMilestonePhase = KimiMilestonePhase::ArtifactUnderstanding;
+/// Global repository-backed Kimi milestone slice.
+pub const KIMI_IMPLEMENTED_PHASE: KimiMilestonePhase = KimiMilestonePhase::BaselineImplementation;
+
+/// Conservative phase label for the standalone artifact-understanding bundle.
+///
+/// RFC 0002 adds runnable baseline execution, but [`KimiArtifactUnderstanding`]
+/// still only represents the Phase A metadata/import-planning surface.
+pub const KIMI_ARTIFACT_UNDERSTANDING_PHASE: KimiMilestonePhase =
+    KimiMilestonePhase::ArtifactUnderstanding;

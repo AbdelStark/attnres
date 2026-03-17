@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::path::Path;
 
-use crate::kimi::schedule::{KimiLayerSchedule, KimiLayerScheduleError};
+use crate::kimi::schedule::{
+    KimiAttentionLayerKind, KimiFeedForwardLayerKind, KimiLayerSchedule, KimiLayerScheduleError,
+};
 
 /// Typed subset of `linear_attn_config` from the public Kimi artifact config.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -14,11 +16,12 @@ pub struct KimiLinearAttentionConfig {
     pub short_conv_kernel_size: usize,
 }
 
-/// Typed subset of Hugging Face `config.json` needed for RFC 0001 staging.
+/// Typed subset of Hugging Face `config.json` needed for RFC 0002 baseline Kimi.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KimiArtifactConfig {
     pub model_type: String,
     pub dtype: String,
+    pub vocab_size: usize,
     pub hidden_size: usize,
     pub intermediate_size: usize,
     pub moe_intermediate_size: usize,
@@ -40,11 +43,122 @@ pub struct KimiArtifactConfig {
     pub num_shared_experts: usize,
     pub tie_word_embeddings: bool,
     pub use_cache: bool,
+    pub rms_norm_eps: f64,
     pub linear_attn_config: KimiLinearAttentionConfig,
 }
 
+/// Runtime view of the Kimi attention parameter surface used by the local baseline.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KimiAttentionRuntimeConfig {
+    pub hidden_size: usize,
+    pub num_attention_heads: usize,
+    pub num_key_value_heads: usize,
+    pub head_dim: usize,
+    pub kv_lora_rank: usize,
+    pub q_lora_rank: Option<usize>,
+    pub qk_nope_head_dim: usize,
+    pub qk_rope_head_dim: usize,
+    pub v_head_dim: usize,
+    pub mla_use_nope: bool,
+    pub linear_attention_num_heads: usize,
+    pub linear_attention_head_dim: usize,
+    pub linear_attention_short_conv_kernel_size: usize,
+}
+
+impl KimiAttentionRuntimeConfig {
+    pub fn mla_qk_head_dim(&self) -> usize {
+        self.qk_nope_head_dim + self.qk_rope_head_dim
+    }
+
+    pub fn kv_repeat_factor(&self) -> usize {
+        self.num_attention_heads / self.num_key_value_heads
+    }
+
+    pub fn kda_conv_history_len(&self) -> usize {
+        self.linear_attention_short_conv_kernel_size
+            .saturating_sub(1)
+    }
+}
+
+/// Dense SiLU MLP runtime parameters.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KimiDenseMlpRuntimeConfig {
+    pub hidden_size: usize,
+    pub intermediate_size: usize,
+    pub hidden_act: String,
+}
+
+/// Sparse MoE runtime parameters.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KimiSparseMoeRuntimeConfig {
+    pub hidden_size: usize,
+    pub intermediate_size: usize,
+    pub num_experts: usize,
+    pub num_experts_per_token: usize,
+    pub num_shared_experts: usize,
+    pub hidden_act: String,
+}
+
+/// Typed, validated runtime config used by the local RFC 0002 baseline.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KimiBaselineConfig {
+    pub artifact: KimiArtifactConfig,
+    pub layer_schedule: KimiLayerSchedule,
+    pub attention: KimiAttentionRuntimeConfig,
+    pub dense_mlp: KimiDenseMlpRuntimeConfig,
+    pub sparse_moe: KimiSparseMoeRuntimeConfig,
+}
+
+impl KimiBaselineConfig {
+    pub fn try_validate(&self) -> Result<(), KimiArtifactConfigError> {
+        self.artifact.try_validate()?;
+        if self.layer_schedule != self.artifact.try_layer_schedule()? {
+            return Err(KimiArtifactConfigError::LayerScheduleMismatchWithArtifact);
+        }
+        Ok(())
+    }
+
+    pub fn num_hidden_layers(&self) -> usize {
+        self.artifact.num_hidden_layers
+    }
+
+    pub fn hidden_size(&self) -> usize {
+        self.artifact.hidden_size
+    }
+
+    pub fn vocab_size(&self) -> usize {
+        self.artifact.vocab_size
+    }
+
+    pub fn rms_norm_eps(&self) -> f64 {
+        self.artifact.rms_norm_eps
+    }
+
+    pub fn use_cache(&self) -> bool {
+        self.artifact.use_cache
+    }
+
+    pub fn try_layer_attention_kind(
+        &self,
+        layer_idx: usize,
+    ) -> Result<KimiAttentionLayerKind, KimiArtifactConfigError> {
+        self.layer_schedule
+            .try_attention_kind(layer_idx)
+            .map_err(KimiArtifactConfigError::from)
+    }
+
+    pub fn try_layer_feed_forward_kind(
+        &self,
+        layer_idx: usize,
+    ) -> Result<KimiFeedForwardLayerKind, KimiArtifactConfigError> {
+        self.layer_schedule
+            .try_feed_forward_kind(layer_idx)
+            .map_err(KimiArtifactConfigError::from)
+    }
+}
+
 /// Typed validation failures for [`KimiArtifactConfig`].
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum KimiArtifactConfigError {
     ReadFailed {
         path: String,
@@ -57,6 +171,7 @@ pub enum KimiArtifactConfigError {
         model_type: String,
     },
     DtypeMustNotBeEmpty,
+    VocabSizeMustBePositive,
     HiddenSizeMustBePositive,
     IntermediateSizeMustBePositive,
     MoeIntermediateSizeMustBePositive,
@@ -86,6 +201,9 @@ pub enum KimiArtifactConfigError {
         num_shared_experts: usize,
         num_experts: usize,
     },
+    RmsNormEpsMustBePositive {
+        rms_norm_eps: f64,
+    },
     LinearAttentionNumHeadsMustBePositive,
     LinearAttentionHeadDimMustBePositive,
     LinearAttentionShortConvKernelSizeMustBePositive,
@@ -93,7 +211,12 @@ pub enum KimiArtifactConfigError {
         linear_attn_num_heads: usize,
         num_attention_heads: usize,
     },
+    LinearAttentionHeadDimMustMatchValueHeadDim {
+        linear_attn_head_dim: usize,
+        value_head_dim: usize,
+    },
     LayerSchedule(KimiLayerScheduleError),
+    LayerScheduleMismatchWithArtifact,
 }
 
 impl Display for KimiArtifactConfigError {
@@ -108,6 +231,7 @@ impl Display for KimiArtifactConfigError {
                 "expected model_type = \"kimi_linear\", got \"{model_type}\""
             ),
             Self::DtypeMustNotBeEmpty => write!(f, "dtype must not be empty"),
+            Self::VocabSizeMustBePositive => write!(f, "vocab_size must be positive, got 0"),
             Self::HiddenSizeMustBePositive => write!(f, "hidden_size must be positive, got 0"),
             Self::IntermediateSizeMustBePositive => {
                 write!(f, "intermediate_size must be positive, got 0")
@@ -144,7 +268,7 @@ impl Display for KimiArtifactConfigError {
                 write!(f, "hidden_act must be \"silu\" for Kimi Linear, got \"{hidden_act}\"")
             }
             Self::TiedWordEmbeddingsUnsupported => {
-                write!(f, "tie_word_embeddings = true is out of scope for Kimi Linear RFC 0001")
+                write!(f, "tie_word_embeddings = true is out of scope for Kimi Linear RFC 0002")
             }
             Self::NumExpertsMustBePositive => write!(f, "num_experts must be positive, got 0"),
             Self::NumExpertsPerTokenMustBePositive => {
@@ -164,6 +288,9 @@ impl Display for KimiArtifactConfigError {
                 f,
                 "num_shared_experts ({num_shared_experts}) must be <= num_experts ({num_experts})"
             ),
+            Self::RmsNormEpsMustBePositive { rms_norm_eps } => {
+                write!(f, "rms_norm_eps must be positive, got {rms_norm_eps}")
+            }
             Self::LinearAttentionNumHeadsMustBePositive => {
                 write!(f, "linear_attn_config.num_heads must be positive, got 0")
             }
@@ -181,7 +308,18 @@ impl Display for KimiArtifactConfigError {
                 f,
                 "linear_attn_config.num_heads ({linear_attn_num_heads}) must match num_attention_heads ({num_attention_heads})"
             ),
+            Self::LinearAttentionHeadDimMustMatchValueHeadDim {
+                linear_attn_head_dim,
+                value_head_dim,
+            } => write!(
+                f,
+                "linear_attn_config.head_dim ({linear_attn_head_dim}) must match v_head_dim ({value_head_dim}) in the RFC 0002 local KDA scaffold"
+            ),
             Self::LayerSchedule(err) => write!(f, "{err}"),
+            Self::LayerScheduleMismatchWithArtifact => write!(
+                f,
+                "baseline layer schedule drifted from artifact-derived schedule; this is a bug in KimiBaselineConfig construction"
+            ),
         }
     }
 }
@@ -222,6 +360,9 @@ impl KimiArtifactConfig {
         }
         if self.dtype.trim().is_empty() {
             return Err(KimiArtifactConfigError::DtypeMustNotBeEmpty);
+        }
+        if self.vocab_size == 0 {
+            return Err(KimiArtifactConfigError::VocabSizeMustBePositive);
         }
         if self.hidden_size == 0 {
             return Err(KimiArtifactConfigError::HiddenSizeMustBePositive);
@@ -295,6 +436,11 @@ impl KimiArtifactConfig {
                 num_experts: self.num_experts,
             });
         }
+        if self.rms_norm_eps <= 0.0 {
+            return Err(KimiArtifactConfigError::RmsNormEpsMustBePositive {
+                rms_norm_eps: self.rms_norm_eps,
+            });
+        }
         if self.linear_attn_config.num_heads == 0 {
             return Err(KimiArtifactConfigError::LinearAttentionNumHeadsMustBePositive);
         }
@@ -312,6 +458,14 @@ impl KimiArtifactConfig {
                 },
             );
         }
+        if self.linear_attn_config.head_dim != self.v_head_dim {
+            return Err(
+                KimiArtifactConfigError::LinearAttentionHeadDimMustMatchValueHeadDim {
+                    linear_attn_head_dim: self.linear_attn_config.head_dim,
+                    value_head_dim: self.v_head_dim,
+                },
+            );
+        }
 
         self.try_layer_schedule()?;
         Ok(())
@@ -325,5 +479,44 @@ impl KimiArtifactConfig {
             self.first_k_dense_replace,
             self.moe_layer_freq,
         )?)
+    }
+
+    pub fn try_baseline_config(&self) -> Result<KimiBaselineConfig, KimiArtifactConfigError> {
+        self.try_validate()?;
+
+        Ok(KimiBaselineConfig {
+            artifact: self.clone(),
+            layer_schedule: self.try_layer_schedule()?,
+            attention: KimiAttentionRuntimeConfig {
+                hidden_size: self.hidden_size,
+                num_attention_heads: self.num_attention_heads,
+                num_key_value_heads: self.num_key_value_heads,
+                head_dim: self.head_dim,
+                kv_lora_rank: self.kv_lora_rank,
+                q_lora_rank: self.q_lora_rank,
+                qk_nope_head_dim: self.qk_nope_head_dim,
+                qk_rope_head_dim: self.qk_rope_head_dim,
+                v_head_dim: self.v_head_dim,
+                mla_use_nope: self.mla_use_nope,
+                linear_attention_num_heads: self.linear_attn_config.num_heads,
+                linear_attention_head_dim: self.linear_attn_config.head_dim,
+                linear_attention_short_conv_kernel_size: self
+                    .linear_attn_config
+                    .short_conv_kernel_size,
+            },
+            dense_mlp: KimiDenseMlpRuntimeConfig {
+                hidden_size: self.hidden_size,
+                intermediate_size: self.intermediate_size,
+                hidden_act: self.hidden_act.clone(),
+            },
+            sparse_moe: KimiSparseMoeRuntimeConfig {
+                hidden_size: self.hidden_size,
+                intermediate_size: self.moe_intermediate_size,
+                num_experts: self.num_experts,
+                num_experts_per_token: self.num_experts_per_token,
+                num_shared_experts: self.num_shared_experts,
+                hidden_act: self.hidden_act.clone(),
+            },
+        })
     }
 }

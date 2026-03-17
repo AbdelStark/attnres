@@ -1,25 +1,42 @@
-//! RFC 0001 Kimi milestone scaffolding.
+//! Staged Kimi Linear support.
 //!
-//! This module currently implements Phase A "artifact understanding":
-//! typed config parsing, typed layer-schedule decoding, shard-index metadata,
-//! and explicit import planning/report surfaces.
+//! The repository now contains two concrete Kimi delivery slices:
+//! - RFC 0001 Phase A artifact-understanding surfaces for config/index/import
+//!   metadata.
+//! - RFC 0002 baseline Kimi Linear execution scaffolding with typed MLA/KDA
+//!   layers, dense-vs-MoE placement, and separate decode-cache families.
 //!
-//! It intentionally does not provide runnable Kimi execution, checkpoint
-//! loading, or AttnRes-Kimi model paths yet. Those are deferred to later RFCs.
+//! Sharded checkpoint import, reference parity, and AttnRes-Kimi remain
+//! deferred to later RFCs.
 
+pub mod attention;
+pub mod cache;
 pub mod config;
 pub mod import;
 pub mod index;
+pub mod layer;
+pub mod mlp;
+pub mod model;
+pub mod moe;
 pub mod phase;
 pub mod schedule;
 
-pub use config::{KimiArtifactConfig, KimiArtifactConfigError, KimiLinearAttentionConfig};
+pub use attention::{KimiKdaAttention, KimiMlaAttention};
+pub use cache::{KimiCacheError, KimiDecodeCache, KimiKdaCache, KimiLayerCache, KimiMlaCache};
+pub use config::{
+    KimiArtifactConfig, KimiArtifactConfigError, KimiAttentionRuntimeConfig, KimiBaselineConfig,
+    KimiDenseMlpRuntimeConfig, KimiLinearAttentionConfig, KimiSparseMoeRuntimeConfig,
+};
 pub use import::{
     KimiArtifactUnderstanding, KimiImportError, KimiImportMode, KimiImportPlan, KimiImportReport,
     KimiImportSelection,
 };
 pub use index::{KimiShardIndex, KimiShardIndexError, KimiShardIndexMetadata};
-pub use phase::{KimiMilestonePhase, KIMI_IMPLEMENTED_PHASE};
+pub use layer::KimiDecoderLayer;
+pub use mlp::KimiDenseMlp;
+pub use model::KimiLinearModel;
+pub use moe::KimiSparseMoe;
+pub use phase::{KimiMilestonePhase, KIMI_ARTIFACT_UNDERSTANDING_PHASE, KIMI_IMPLEMENTED_PHASE};
 pub use schedule::{
     KimiAttentionLayerKind, KimiFeedForwardLayerKind, KimiLayerSchedule, KimiLayerScheduleError,
     KimiScheduledLayer,

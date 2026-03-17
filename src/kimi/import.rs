@@ -5,7 +5,9 @@ use std::path::Path;
 
 use crate::kimi::config::{KimiArtifactConfig, KimiArtifactConfigError};
 use crate::kimi::index::{KimiShardIndex, KimiShardIndexError};
-use crate::kimi::phase::{KimiMilestonePhase, KIMI_IMPLEMENTED_PHASE};
+use crate::kimi::phase::{
+    KimiMilestonePhase, KIMI_ARTIFACT_UNDERSTANDING_PHASE, KIMI_IMPLEMENTED_PHASE,
+};
 use crate::kimi::schedule::KimiLayerSchedule;
 
 pub const KIMI_CONFIG_FILENAME: &str = "config.json";
@@ -59,7 +61,7 @@ pub struct KimiArtifactUnderstanding {
 }
 
 /// Typed failures for Phase A artifact understanding and import planning.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum KimiImportError {
     Config(KimiArtifactConfigError),
     ShardIndex(KimiShardIndexError),
@@ -167,7 +169,7 @@ impl KimiArtifactUnderstanding {
 
         let layer_schedule = config.try_layer_schedule()?;
         let report = KimiImportReport {
-            phase: KIMI_IMPLEMENTED_PHASE,
+            phase: KIMI_ARTIFACT_UNDERSTANDING_PHASE,
             ready_modes: vec![KimiImportMode::Inspect],
             deferred_modes: vec![KimiImportMode::Slice, KimiImportMode::Full],
             total_parameters: shard_index.metadata.total_parameter_count,
@@ -194,7 +196,7 @@ impl KimiArtifactUnderstanding {
     }
 
     pub fn phase(&self) -> KimiMilestonePhase {
-        KIMI_IMPLEMENTED_PHASE
+        KIMI_ARTIFACT_UNDERSTANDING_PHASE
     }
 
     pub fn inspect_plan(&self) -> KimiImportPlan {
@@ -213,18 +215,18 @@ impl KimiArtifactUnderstanding {
         selection.try_validate(self.config.num_hidden_layers)?;
         Err(KimiImportError::ModeNotYetImplemented {
             mode: KimiImportMode::Slice,
-            implemented_phase: self.phase(),
+            implemented_phase: KIMI_IMPLEMENTED_PHASE,
             required_phase: KimiMilestonePhase::BaselineImplementation,
-            detail: "tensor-to-module mapping and shard slicing are deferred to RFC 0002/0003",
+            detail: "baseline execution exists, but tensor-to-module mapping and shard slicing remain deferred to RFC 0003",
         })
     }
 
     pub fn try_full_plan(&self) -> Result<KimiImportPlan, KimiImportError> {
         Err(KimiImportError::ModeNotYetImplemented {
             mode: KimiImportMode::Full,
-            implemented_phase: self.phase(),
+            implemented_phase: KIMI_IMPLEMENTED_PHASE,
             required_phase: KimiMilestonePhase::BaselineImplementation,
-            detail: "full checkpoint loading is deferred to RFC 0002/0003",
+            detail: "baseline execution exists, but full checkpoint loading remains deferred to RFC 0003",
         })
     }
 }

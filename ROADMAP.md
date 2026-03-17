@@ -104,8 +104,8 @@ Missing:
 
 - Formal algorithm/spec document in-repo.
 - PyTorch checkpoint loading.
-- Baseline Kimi execution and checkpoint import beyond RFC 0001 Phase A
-  artifact-understanding scaffolding.
+- Kimi checkpoint import, baseline parity, and AttnRes-Kimi work beyond RFC
+  0002 baseline architecture scaffolding.
 - Stable 1.0 API guarantees.
 
 Fragile:

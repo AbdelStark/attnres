@@ -87,11 +87,17 @@ completed blocks
   - Accepts `Path`-like inputs rather than forcing UTF-8 strings.
 
 - `src/kimi/`
-  - RFC 0001 Phase A artifact-understanding scaffolding.
+  - RFC 0001 artifact understanding plus RFC 0002 baseline Kimi scaffolding.
   - Parses and validates Hugging Face-style Kimi config metadata.
   - Decodes 1-based layer schedules into typed zero-based internal schedules.
+  - Instantiates a separate baseline `KimiLinearModel` rather than mutating the
+    reference `AttnResTransformer`.
+  - Selects MLA vs KDA attention modules from the typed schedule and keeps
+    dense MLP vs sparse MoE placement explicit.
+  - Separates MLA full-attention cache state from KDA linear-attention cache
+    state.
   - Parses shard-index metadata and exposes explicit import planning surfaces.
-  - Does not yet provide baseline Kimi execution, checkpoint loading, or
+  - Still does not provide sharded checkpoint loading, baseline parity, or
     AttnRes-Kimi model code.
 
 ## Invariants

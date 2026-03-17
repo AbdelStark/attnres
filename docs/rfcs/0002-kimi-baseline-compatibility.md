@@ -1,6 +1,6 @@
 # RFC 0002: Baseline Kimi Linear Compatibility
 
-Status: Draft  
+Status: Implemented in repository as baseline scaffolding  
 Date: 2026-03-17  
 Depends on: RFC 0001
 
