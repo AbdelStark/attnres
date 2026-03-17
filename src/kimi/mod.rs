@@ -8,11 +8,18 @@
 //! - RFC 0003 sharded checkpoint-import scaffolding: tensor locators, explicit
 //!   tensor-to-module coverage reports, dtype policy, selected-layer shard
 //!   planning, and shard-path resolution without fake tensor payload loading.
+//! - RFC 0004 AttnRes-Kimi execution scaffolding with a separate model/layer
+//!   path that preserves baseline Kimi sublayer selection while inserting two
+//!   AttnRes operations per decoder layer.
 //!
-//! Baseline parity, full payload loading/parity claims, and AttnRes-Kimi remain
-//! deferred to later RFCs.
+//! Baseline parity, full payload loading/parity claims, public-checkpoint
+//! compatibility, optimized kernels, and RFC 0005 validation/benchmark work
+//! remain deferred.
 
 pub mod attention;
+pub mod attn_res_layer;
+pub mod attn_res_model;
+pub mod attn_res_state;
 pub mod cache;
 pub mod config;
 pub mod import;
@@ -25,10 +32,14 @@ pub mod phase;
 pub mod schedule;
 
 pub use attention::{KimiKdaAttention, KimiMlaAttention};
+pub use attn_res_layer::KimiAttnResDecoderLayer;
+pub use attn_res_model::KimiAttnResModel;
+pub use attn_res_state::{KimiAttnResBlockState, KimiAttnResStateError};
 pub use cache::{KimiCacheError, KimiDecodeCache, KimiKdaCache, KimiLayerCache, KimiMlaCache};
 pub use config::{
-    KimiArtifactConfig, KimiArtifactConfigError, KimiAttentionRuntimeConfig, KimiBaselineConfig,
-    KimiDenseMlpRuntimeConfig, KimiLinearAttentionConfig, KimiSparseMoeRuntimeConfig,
+    KimiArtifactConfig, KimiArtifactConfigError, KimiAttentionRuntimeConfig, KimiAttnResConfig,
+    KimiAttnResConfigError, KimiBaselineConfig, KimiDenseMlpRuntimeConfig,
+    KimiLinearAttentionConfig, KimiSparseMoeRuntimeConfig,
 };
 pub use import::{
     KimiArtifactUnderstanding, KimiDuplicateTensor, KimiImportCoverageError,

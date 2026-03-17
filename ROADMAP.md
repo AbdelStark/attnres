@@ -107,13 +107,16 @@ Missing:
 - Kimi tensor payload loading/parity beyond the RFC 0003 shard-planning and
   coverage-report scaffolding.
 - Baseline parity.
-- RFC 0004 AttnRes-Kimi integration.
+- Full public-checkpoint compatibility or parity claims for baseline Kimi or
+  AttnRes-Kimi.
+- RFC 0005 validation and benchmark work for AttnRes-Kimi.
 - Stable 1.0 API guarantees.
 
 Fragile:
 
 - GPU backend claims are not backed by automated validation in this repo.
-- Two-phase inference has good equivalence coverage but limited benchmark data.
+- Two-phase inference has good reduced-config equivalence coverage but limited
+  benchmark data.
 
 Performance ceilings:
 

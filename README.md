@@ -49,10 +49,16 @@ Known limitations:
   scaffolding: typed tensor locators, tensor-to-module coverage reports,
   selected-layer/full shard planning, dtype policy, and shard-path resolution
   without fake tensor payload loading.
+- `src/kimi/` now also implements RFC 0004 AttnRes-Kimi execution scaffolding:
+  a separate `KimiAttnResModel` / `KimiAttnResDecoderLayer` path that keeps the
+  RFC 0002 MLA-vs-KDA and dense-vs-MoE sublayer schedule while inserting two
+  AttnRes operations per decoder layer.
 - Baseline parity is still deferred.
-- RFC 0004 AttnRes-Kimi integration is still deferred.
+- Baseline-parity claims for Kimi and full public-checkpoint compatibility for
+  either baseline Kimi or AttnRes-Kimi are still deferred.
 - No reference-parity harness, validated public-checkpoint hot swap, or
   optimized KDA kernels are shipped yet.
+- RFC 0005 validation and benchmark work is still deferred.
 - No compatibility promise for a stable 1.0 public API yet.
 - No dedicated formal spec document is checked into this repository today.
 
@@ -151,8 +157,12 @@ support" claim.
   tensor reporting, selected-layer/full shard plans, and explicit `bfloat16` to
   local-runtime dtype policy.
 - Phase C: baseline parity. Deferred.
-- Phase D: AttnRes-Kimi integration. Deferred in RFC 0004.
-- Phase E: benchmarks and research validation. Deferred.
+- Phase D: AttnRes-Kimi integration. Implemented in this checkout as execution
+  scaffolding only: separate AttnRes-Kimi model/layer/state types, explicit
+  cache-vs-block-state handling, sublayer-space block boundaries, and
+  reduced-config two-phase equivalence coverage. Baseline parity, public
+  checkpoint compatibility, and optimized kernels remain deferred.
+- Phase E: benchmarks and research validation. Deferred in RFC 0005.
 
 See [docs/rfcs/0001-real-model-milestone-scope.md](docs/rfcs/0001-real-model-milestone-scope.md)
 for the accepted sequencing and scope boundaries.

@@ -10,8 +10,10 @@
 //! The crate also exposes a separate `kimi` module tree for the staged Kimi
 //! milestone. This checkout includes RFC 0001 artifact understanding and RFC
 //! 0002 baseline Kimi Linear execution scaffolding plus RFC 0003 checkpoint
-//! import scaffolding for tensor-name coverage and shard planning. Baseline
-//! parity and RFC 0004 AttnRes-Kimi remain deferred.
+//! import scaffolding for tensor-name coverage and shard planning, plus RFC
+//! 0004 AttnRes-Kimi execution scaffolding via a separate
+//! `kimi::KimiAttnResModel` path. Baseline parity, public-checkpoint parity,
+//! and RFC 0005 validation/benchmark work remain deferred.
 //!
 //! ## Quick Start
 //!

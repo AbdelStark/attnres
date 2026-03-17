@@ -88,20 +88,24 @@ completed blocks
 
 - `src/kimi/`
   - RFC 0001 artifact understanding, RFC 0002 baseline Kimi scaffolding, and
-    RFC 0003 import-planning/report scaffolding.
+    RFC 0003 import-planning/report scaffolding plus RFC 0004 AttnRes-Kimi
+    execution scaffolding.
   - Parses and validates Hugging Face-style Kimi config metadata.
   - Decodes 1-based layer schedules into typed zero-based internal schedules.
   - Instantiates a separate baseline `KimiLinearModel` rather than mutating the
     reference `AttnResTransformer`.
+  - Instantiates a separate `KimiAttnResModel` / `KimiAttnResDecoderLayer`
+    path so baseline Kimi and AttnRes-Kimi remain distinct model families.
   - Selects MLA vs KDA attention modules from the typed schedule and keeps
     dense MLP vs sparse MoE placement explicit.
   - Separates MLA full-attention cache state from KDA linear-attention cache
-    state.
+    state, and keeps AttnRes block state explicit instead of collapsing it into
+    the baseline decode cache.
   - Parses shard-index metadata, resolves tensor-name to shard paths, and emits
     explicit tensor-to-module coverage reports plus selected-layer/full shard
     plans.
   - Still does not provide full tensor payload loading/parity for public Kimi
-    checkpoints, baseline parity claims, or AttnRes-Kimi model code.
+    checkpoints, baseline parity claims, or RFC 0005 benchmark validation.
 
 ## Invariants
 

@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 use std::path::Path;
 
+use crate::config::{AttnResConfig, ConfigError};
 use crate::kimi::schedule::{
     KimiAttentionLayerKind, KimiFeedForwardLayerKind, KimiLayerSchedule, KimiLayerScheduleError,
 };
@@ -109,6 +110,13 @@ pub struct KimiBaselineConfig {
     pub sparse_moe: KimiSparseMoeRuntimeConfig,
 }
 
+/// Typed runtime config for the RFC 0004 AttnRes-Kimi execution scaffold.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KimiAttnResConfig {
+    pub baseline: KimiBaselineConfig,
+    pub num_blocks: usize,
+}
+
 impl KimiBaselineConfig {
     pub fn try_validate(&self) -> Result<(), KimiArtifactConfigError> {
         self.artifact.try_validate()?;
@@ -154,6 +162,69 @@ impl KimiBaselineConfig {
         self.layer_schedule
             .try_feed_forward_kind(layer_idx)
             .map_err(KimiArtifactConfigError::from)
+    }
+
+    pub fn try_attn_res_config(
+        &self,
+        num_blocks: usize,
+    ) -> Result<KimiAttnResConfig, KimiAttnResConfigError> {
+        let config = KimiAttnResConfig {
+            baseline: self.clone(),
+            num_blocks,
+        };
+        config.try_validate()?;
+        Ok(config)
+    }
+}
+
+impl KimiAttnResConfig {
+    pub fn try_validate(&self) -> Result<(), KimiAttnResConfigError> {
+        self.baseline.try_validate()?;
+        self.try_attn_res_core_config()?;
+        Ok(())
+    }
+
+    pub fn num_hidden_layers(&self) -> usize {
+        self.baseline.num_hidden_layers()
+    }
+
+    pub fn num_sublayers(&self) -> usize {
+        self.num_hidden_layers() * 2
+    }
+
+    pub fn hidden_size(&self) -> usize {
+        self.baseline.hidden_size()
+    }
+
+    pub fn vocab_size(&self) -> usize {
+        self.baseline.vocab_size()
+    }
+
+    pub fn rms_norm_eps(&self) -> f64 {
+        self.baseline.rms_norm_eps()
+    }
+
+    pub fn use_cache(&self) -> bool {
+        self.baseline.use_cache()
+    }
+
+    pub fn try_attn_res_core_config(&self) -> Result<AttnResConfig, KimiAttnResConfigError> {
+        let attention_heads = self.baseline.attention.num_attention_heads;
+        let config = AttnResConfig::new(self.hidden_size(), self.num_sublayers(), self.num_blocks)
+            .with_num_heads(attention_heads)
+            .with_vocab_size(self.vocab_size())
+            .with_rms_norm_eps(self.rms_norm_eps());
+        config.try_validate()?;
+        Ok(config)
+    }
+
+    pub fn attn_res_core_config(&self) -> AttnResConfig {
+        self.try_attn_res_core_config()
+            .unwrap_or_else(|err| panic!("{err}"))
+    }
+
+    pub fn block_size(&self) -> usize {
+        self.attn_res_core_config().block_size()
     }
 }
 
@@ -329,6 +400,36 @@ impl std::error::Error for KimiArtifactConfigError {}
 impl From<KimiLayerScheduleError> for KimiArtifactConfigError {
     fn from(err: KimiLayerScheduleError) -> Self {
         Self::LayerSchedule(err)
+    }
+}
+
+/// Typed validation failures for [`KimiAttnResConfig`].
+#[derive(Debug, Clone, PartialEq)]
+pub enum KimiAttnResConfigError {
+    Baseline(KimiArtifactConfigError),
+    AttnRes(ConfigError),
+}
+
+impl Display for KimiAttnResConfigError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Baseline(err) => write!(f, "{err}"),
+            Self::AttnRes(err) => write!(f, "{err}"),
+        }
+    }
+}
+
+impl std::error::Error for KimiAttnResConfigError {}
+
+impl From<KimiArtifactConfigError> for KimiAttnResConfigError {
+    fn from(err: KimiArtifactConfigError) -> Self {
+        Self::Baseline(err)
+    }
+}
+
+impl From<ConfigError> for KimiAttnResConfigError {
+    fn from(err: ConfigError) -> Self {
+        Self::AttnRes(err)
     }
 }
 
@@ -518,5 +619,12 @@ impl KimiArtifactConfig {
                 hidden_act: self.hidden_act.clone(),
             },
         })
+    }
+
+    pub fn try_attn_res_config(
+        &self,
+        num_blocks: usize,
+    ) -> Result<KimiAttnResConfig, KimiAttnResConfigError> {
+        self.try_baseline_config()?.try_attn_res_config(num_blocks)
     }
 }
