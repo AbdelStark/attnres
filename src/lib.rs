@@ -7,6 +7,10 @@
 //! with learned softmax attention over depth, enabling selective information routing
 //! across layers.
 //!
+//! The crate also exposes a separate `kimi` module tree for RFC 0001 staging.
+//! That surface currently stops at Phase A artifact understanding and does not
+//! yet provide runnable Kimi execution or checkpoint loading.
+//!
 //! ## Quick Start
 //!
 //! ```rust
@@ -32,6 +36,7 @@ pub mod attn_res_op;
 pub mod block_state;
 pub mod config;
 pub mod feed_forward;
+pub mod kimi;
 pub mod layer;
 pub mod model;
 pub mod rms_norm;

@@ -43,6 +43,11 @@ Known limitations:
 - CI exercises the NdArray backend; GPU backends compile via burn but are not
   validated here.
 - No PyTorch or `safetensors` checkpoint import/export.
+- `src/kimi/` currently implements only RFC 0001 Phase A artifact-understanding
+  surfaces: typed config parsing, typed layer schedules, shard-index metadata,
+  and import planning/report scaffolding.
+- No runnable baseline Kimi Linear model, sharded checkpoint loader, parity
+  harness, or AttnRes-Kimi execution path is shipped yet.
 - No compatibility promise for a stable 1.0 public API yet.
 - No dedicated formal spec document is checked into this repository today.
 
@@ -117,11 +122,28 @@ Repository map:
 - `src/model.rs`: end-to-end model and two-phase forward path.
 - `src/two_phase.rs`: the paper's two-phase inference primitives.
 - `src/serialization.rs`: save/load helpers for burn record formats.
+- `src/kimi/`: RFC 0001 Phase A Kimi artifact-understanding scaffolding only.
 - `tests/`: unit, integration, property, and differential coverage.
 - `web-demo/`: WASM crate plus a Vite front-end.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the detailed module map and
 invariants.
+
+## RFC 0001 Staging
+
+The real-model milestone is staged rather than presented as one vague "Kimi
+support" claim.
+
+- Phase A: artifact understanding. Implemented in this checkout via
+  `attnres::kimi` typed config, layer-schedule, shard-index, and import
+  planning/report APIs.
+- Phase B: baseline Kimi implementation. Deferred.
+- Phase C: baseline parity. Deferred.
+- Phase D: AttnRes-Kimi integration. Deferred.
+- Phase E: benchmarks and research validation. Deferred.
+
+See [docs/rfcs/0001-real-model-milestone-scope.md](docs/rfcs/0001-real-model-milestone-scope.md)
+for the accepted sequencing and scope boundaries.
 
 ## Examples And Demos
 

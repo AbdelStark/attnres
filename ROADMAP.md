@@ -104,6 +104,8 @@ Missing:
 
 - Formal algorithm/spec document in-repo.
 - PyTorch checkpoint loading.
+- Baseline Kimi execution and checkpoint import beyond RFC 0001 Phase A
+  artifact-understanding scaffolding.
 - Stable 1.0 API guarantees.
 
 Fragile:

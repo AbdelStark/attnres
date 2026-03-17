@@ -12,12 +12,16 @@ The repository did not maintain a structured changelog before March 16, 2026.
 - Fallible initialization helpers such as `try_validate`, `try_init_model`,
   `try_init_layer`, and `try_init_op`.
 - `ARCHITECTURE.md` and `CONTRIBUTING.md`.
+- `attnres::kimi` Phase A scaffolding for RFC 0001: typed Kimi artifact config,
+  typed layer schedules, shard-index metadata, and import planning/report APIs.
 
 ### Changed
 
 - Serialization APIs now accept `Path`-like inputs instead of only `&str`.
 - README, roadmap, and agent context files now reflect the current alpha status
   and verified commands instead of stale or aspirational claims.
+- Top-level docs now state that Kimi work is staged and that only Phase A
+  artifact understanding is implemented in this checkout.
 
 ### Fixed
 

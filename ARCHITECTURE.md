@@ -86,6 +86,14 @@ completed blocks
   - Save/load helpers for burn recorders.
   - Accepts `Path`-like inputs rather than forcing UTF-8 strings.
 
+- `src/kimi/`
+  - RFC 0001 Phase A artifact-understanding scaffolding.
+  - Parses and validates Hugging Face-style Kimi config metadata.
+  - Decodes 1-based layer schedules into typed zero-based internal schedules.
+  - Parses shard-index metadata and exposes explicit import planning surfaces.
+  - Does not yet provide baseline Kimi execution, checkpoint loading, or
+    AttnRes-Kimi model code.
+
 ## Invariants
 
 These are the invariants that most directly affect correctness:
@@ -105,6 +113,8 @@ result.
 
 - Invalid caller-supplied configuration should use `ConfigError`.
 - Serialization failures return `SerializationError`.
+- Kimi artifact-understanding failures return typed `attnres::kimi::*Error`
+  enums with explicit phase-gated errors for not-yet-implemented modes.
 - Internal invariant breaks still panic because they represent library bugs, not
   recoverable runtime conditions.
 
