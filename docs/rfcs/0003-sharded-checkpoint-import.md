@@ -1,6 +1,6 @@
 # RFC 0003: Sharded Checkpoint Import For Kimi
 
-Status: Draft  
+Status: Implemented in repository as planning/report scaffolding  
 Date: 2026-03-17  
 Depends on: RFC 0001, RFC 0002
 
@@ -30,6 +30,18 @@ The importer must support three modes:
 - `inspect`: parse config and index, report model structure and coverage
 - `slice`: load only selected layers or modules
 - `full`: load the full supported model
+
+Repository note:
+
+- This checkout implements the typed planning/reporting scaffold for all three
+  modes: shard index ingest, tensor-name to module classification, selected
+  layer and full shard plans, dtype policy, and explicit unsupported/missing
+  tensor reporting.
+- It does not yet claim end-to-end public-checkpoint tensor payload loading or
+  baseline numerical parity.
+- Where the public Kimi tensor surface does not match the current RFC 0002
+  local scaffold exactly, the implementation reports the mismatch rather than
+  silently dropping or inventing tensors.
 
 ## Why A Dedicated Importer
 

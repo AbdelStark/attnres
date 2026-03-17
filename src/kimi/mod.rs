@@ -5,8 +5,11 @@
 //!   metadata.
 //! - RFC 0002 baseline Kimi Linear execution scaffolding with typed MLA/KDA
 //!   layers, dense-vs-MoE placement, and separate decode-cache families.
+//! - RFC 0003 sharded checkpoint-import scaffolding: tensor locators, explicit
+//!   tensor-to-module coverage reports, dtype policy, selected-layer shard
+//!   planning, and shard-path resolution without fake tensor payload loading.
 //!
-//! Sharded checkpoint import, reference parity, and AttnRes-Kimi remain
+//! Baseline parity, full payload loading/parity claims, and AttnRes-Kimi remain
 //! deferred to later RFCs.
 
 pub mod attention;
@@ -28,10 +31,17 @@ pub use config::{
     KimiDenseMlpRuntimeConfig, KimiLinearAttentionConfig, KimiSparseMoeRuntimeConfig,
 };
 pub use import::{
-    KimiArtifactUnderstanding, KimiImportError, KimiImportMode, KimiImportPlan, KimiImportReport,
-    KimiImportSelection,
+    KimiArtifactUnderstanding, KimiDuplicateTensor, KimiImportCoverageError,
+    KimiImportCoverageReport, KimiImportDtypeAction, KimiImportDtypePolicy, KimiImportError,
+    KimiImportMode, KimiImportPlan, KimiImportReport, KimiImportRuntimeDtype, KimiImportSelection,
+    KimiLayerModuleRef, KimiMissingTensor, KimiModuleCoverage, KimiModuleRef, KimiResolvedShard,
+    KimiShardResolver, KimiShardResolverError, KimiTensorMapping, KimiTensorMappingStatus,
+    KimiUnsupportedTensorReason,
 };
-pub use index::{KimiShardIndex, KimiShardIndexError, KimiShardIndexMetadata};
+pub use index::{
+    KimiShardIndex, KimiShardIndexError, KimiShardIndexMetadata, KimiTensorLocation,
+    KimiTensorLocator, KimiTensorLocatorError,
+};
 pub use layer::KimiDecoderLayer;
 pub use mlp::KimiDenseMlp;
 pub use model::KimiLinearModel;

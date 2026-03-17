@@ -60,6 +60,42 @@ impl Display for KimiShardIndexError {
 
 impl std::error::Error for KimiShardIndexError {}
 
+/// Resolved location for one tensor in a sharded Kimi checkpoint index.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KimiTensorLocation {
+    pub tensor_name: String,
+    pub shard_path: String,
+}
+
+/// Name-to-shard lookup surface built from [`KimiShardIndex`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct KimiTensorLocator {
+    weight_map: BTreeMap<String, String>,
+}
+
+/// Typed lookup failures for [`KimiTensorLocator`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum KimiTensorLocatorError {
+    EmptyTensorName,
+    MissingTensor { tensor_name: String },
+}
+
+impl Display for KimiTensorLocatorError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EmptyTensorName => write!(f, "tensor name must not be empty"),
+            Self::MissingTensor { tensor_name } => {
+                write!(
+                    f,
+                    "tensor '{tensor_name}' is not present in the shard index"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for KimiTensorLocatorError {}
+
 impl KimiShardIndex {
     pub fn from_json_str(json: &str) -> Result<Self, KimiShardIndexError> {
         let index: Self =
@@ -124,5 +160,63 @@ impl KimiShardIndex {
 
     pub fn shard_for_tensor(&self, tensor_name: &str) -> Option<&str> {
         self.weight_map.get(tensor_name).map(String::as_str)
+    }
+
+    pub fn tensor_locator(&self) -> KimiTensorLocator {
+        KimiTensorLocator {
+            weight_map: self.weight_map.clone(),
+        }
+    }
+}
+
+impl KimiTensorLocator {
+    pub fn from_index(index: &KimiShardIndex) -> Self {
+        index.tensor_locator()
+    }
+
+    pub fn tensor_count(&self) -> usize {
+        self.weight_map.len()
+    }
+
+    pub fn shard_for_tensor(&self, tensor_name: &str) -> Option<&str> {
+        self.weight_map.get(tensor_name).map(String::as_str)
+    }
+
+    pub fn locate(&self, tensor_name: &str) -> Result<KimiTensorLocation, KimiTensorLocatorError> {
+        if tensor_name.trim().is_empty() {
+            return Err(KimiTensorLocatorError::EmptyTensorName);
+        }
+
+        let shard_path = self.weight_map.get(tensor_name).ok_or_else(|| {
+            KimiTensorLocatorError::MissingTensor {
+                tensor_name: tensor_name.to_string(),
+            }
+        })?;
+        Ok(KimiTensorLocation {
+            tensor_name: tensor_name.to_string(),
+            shard_path: shard_path.clone(),
+        })
+    }
+
+    pub fn required_shards_for_tensors<I, S>(
+        &self,
+        tensor_names: I,
+    ) -> Result<Vec<String>, KimiTensorLocatorError>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let mut shards = BTreeSet::new();
+
+        for tensor_name in tensor_names {
+            let location = self.locate(tensor_name.as_ref())?;
+            shards.insert(location.shard_path);
+        }
+
+        Ok(shards.into_iter().collect())
+    }
+
+    pub fn weight_map(&self) -> &BTreeMap<String, String> {
+        &self.weight_map
     }
 }

@@ -42,13 +42,17 @@ Known limitations:
 
 - CI exercises the NdArray backend; GPU backends compile via burn but are not
   validated here.
-- No PyTorch or `safetensors` checkpoint import/export.
-- `src/kimi/` implements RFC 0001 Phase A artifact-understanding surfaces plus
-  RFC 0002 baseline Kimi Linear scaffolding: typed MLA/KDA layer selection,
-  dense-vs-MoE placement, separate MLA/KDA cache families, and random-init
-  token-ID forward paths on reduced configs.
-- No sharded checkpoint loader, reference-parity harness, or AttnRes-Kimi
-  execution path is shipped yet.
+- No general PyTorch checkpoint interchange is shipped for the reference
+  `AttnResTransformer` path.
+- `src/kimi/` now implements RFC 0001 artifact understanding, RFC 0002
+  baseline Kimi Linear scaffolding, and RFC 0003 sharded checkpoint-import
+  scaffolding: typed tensor locators, tensor-to-module coverage reports,
+  selected-layer/full shard planning, dtype policy, and shard-path resolution
+  without fake tensor payload loading.
+- Baseline parity is still deferred.
+- RFC 0004 AttnRes-Kimi integration is still deferred.
+- No reference-parity harness, validated public-checkpoint hot swap, or
+  optimized KDA kernels are shipped yet.
 - No compatibility promise for a stable 1.0 public API yet.
 - No dedicated formal spec document is checked into this repository today.
 
@@ -142,9 +146,12 @@ support" claim.
 - Phase B: baseline Kimi implementation. Implemented in this checkout as
   architecture scaffolding: `KimiLinearModel`, schedule-driven MLA/KDA module
   selection, dense-vs-MoE placement, and separate decode-cache state types.
-- Phase C: baseline parity. Deferred, along with RFC 0003 checkpoint import and
-  later validation work.
-- Phase D: AttnRes-Kimi integration. Deferred.
+- RFC 0003: sharded checkpoint-import scaffolding. Implemented in this checkout
+  as planning/reporting only: tensor locators, module coverage, unsupported
+  tensor reporting, selected-layer/full shard plans, and explicit `bfloat16` to
+  local-runtime dtype policy.
+- Phase C: baseline parity. Deferred.
+- Phase D: AttnRes-Kimi integration. Deferred in RFC 0004.
 - Phase E: benchmarks and research validation. Deferred.
 
 See [docs/rfcs/0001-real-model-milestone-scope.md](docs/rfcs/0001-real-model-milestone-scope.md)

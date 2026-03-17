@@ -104,8 +104,10 @@ Missing:
 
 - Formal algorithm/spec document in-repo.
 - PyTorch checkpoint loading.
-- Kimi checkpoint import, baseline parity, and AttnRes-Kimi work beyond RFC
-  0002 baseline architecture scaffolding.
+- Kimi tensor payload loading/parity beyond the RFC 0003 shard-planning and
+  coverage-report scaffolding.
+- Baseline parity.
+- RFC 0004 AttnRes-Kimi integration.
 - Stable 1.0 API guarantees.
 
 Fragile:

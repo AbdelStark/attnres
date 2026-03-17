@@ -1,8 +1,8 @@
 use attnres::kimi::{
     KimiArtifactConfig, KimiArtifactConfigError, KimiArtifactUnderstanding, KimiAttentionLayerKind,
-    KimiFeedForwardLayerKind, KimiImportError, KimiImportMode, KimiImportSelection,
-    KimiLayerSchedule, KimiLayerScheduleError, KimiMilestonePhase, KimiShardIndex,
-    KimiShardIndexError,
+    KimiFeedForwardLayerKind, KimiImportDtypeAction, KimiImportError, KimiImportMode,
+    KimiImportRuntimeDtype, KimiImportSelection, KimiLayerSchedule, KimiLayerScheduleError,
+    KimiMilestonePhase, KimiShardIndex, KimiShardIndexError,
 };
 use std::fs;
 use std::path::PathBuf;
@@ -186,44 +186,57 @@ fn phase_a_artifact_understanding_loads_from_dir_and_reports_inspect_mode() {
     );
     assert_eq!(
         understanding.report.ready_modes,
-        vec![KimiImportMode::Inspect]
+        vec![
+            KimiImportMode::Inspect,
+            KimiImportMode::Slice,
+            KimiImportMode::Full
+        ]
+    );
+    assert!(understanding.report.deferred_modes.is_empty());
+    assert!(!understanding.report.payload_loading_implemented);
+    assert_eq!(
+        understanding.report.dtype_policy.action,
+        KimiImportDtypeAction::PromoteToF32
     );
     assert_eq!(
-        understanding.report.deferred_modes,
-        vec![KimiImportMode::Slice, KimiImportMode::Full]
+        understanding.report.dtype_policy.runtime_dtype,
+        KimiImportRuntimeDtype::Float32
     );
     assert_eq!(inspect_plan.mode, KimiImportMode::Inspect);
     assert!(inspect_plan.required_shards.is_empty());
+    assert_eq!(inspect_plan.selection.layer_indices, vec![0, 1, 2, 3]);
 
     fs::remove_dir_all(temp_dir).unwrap();
 }
 
 #[test]
-fn slice_plan_is_explicitly_deferred_after_selection_validation() {
+fn slice_plan_reports_missing_supported_tensors_without_fake_success() {
     let understanding = KimiArtifactUnderstanding::try_from_parts(
         KimiArtifactConfig::from_json_str(&sample_config_json()).unwrap(),
         KimiShardIndex::from_json_str(&sample_shard_index_json()).unwrap(),
     )
     .unwrap();
 
-    let err = understanding
+    let plan = understanding
         .try_slice_plan(KimiImportSelection {
             layer_indices: vec![0, 3],
             include_embeddings: true,
             include_final_norm: false,
             include_lm_head: false,
         })
-        .unwrap_err();
+        .unwrap();
 
+    assert_eq!(plan.mode, KimiImportMode::Slice);
+    assert!(!plan.is_fully_loadable());
     assert_eq!(
-        err,
-        KimiImportError::ModeNotYetImplemented {
-            mode: KimiImportMode::Slice,
-            implemented_phase: KimiMilestonePhase::BaselineImplementation,
-            required_phase: KimiMilestonePhase::BaselineImplementation,
-            detail: "baseline execution exists, but tensor-to-module mapping and shard slicing remain deferred to RFC 0003"
-        }
+        plan.required_shards,
+        vec!["model-00001-of-00002.safetensors"]
     );
+    assert!(plan
+        .coverage
+        .missing_tensors
+        .iter()
+        .any(|missing| missing.tensor_name == "model.layers.0.self_attn.q_proj.weight"));
 }
 
 #[test]

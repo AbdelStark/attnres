@@ -4,9 +4,11 @@ This folder now contains the source-of-truth planning set for the real-model
 milestone.
 
 The current code-backed delivery slice for that plan lives in `src/kimi/` and
-now includes RFC 0001 Phase A artifact understanding plus RFC 0002 baseline
-Kimi Linear execution scaffolding. RFC 0003 checkpoint import, parity work, and
-RFC 0004 AttnRes-Kimi integration remain deferred.
+now includes RFC 0001 artifact understanding, RFC 0002 baseline Kimi Linear
+execution scaffolding, and RFC 0003 checkpoint-import scaffolding for shard
+index inspection, tensor coverage reporting, selected-layer/full shard
+planning, and explicit dtype policy. Baseline parity is still deferred, and RFC
+0004 AttnRes-Kimi integration is still deferred.
 
 - `specs/kimi-real-model-integration.md`: top-level specification for running
   `attnres` on a real model architecture, with Kimi Linear as the first target.
