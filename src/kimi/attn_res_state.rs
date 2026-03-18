@@ -68,6 +68,17 @@ impl<B: Backend> KimiAttnResBlockState<B> {
         Ok(state)
     }
 
+    #[cfg(test)]
+    pub(crate) fn from_parts_unchecked(
+        blocks: Vec<Tensor<B, 3>>,
+        partial_block: Option<Tensor<B, 3>>,
+    ) -> Self {
+        Self {
+            blocks,
+            partial_block,
+        }
+    }
+
     pub fn try_validate(&self) -> Result<(), KimiAttnResStateError> {
         let Some(first_block) = self.blocks.first() else {
             return Err(KimiAttnResStateError::CompletedBlocksMustNotBeEmpty);
@@ -177,5 +188,20 @@ mod tests {
         let device = Default::default();
         let state = KimiAttnResBlockState::<TestBackend>::new(Tensor::zeros([1, 2, 4], &device));
         let _ = state.into_partial_block();
+    }
+
+    #[test]
+    #[should_panic(expected = "completed block 1 shape mismatch")]
+    fn attn_res_kimi_state_validate_or_panic_reports_corrupted_completed_blocks() {
+        let device = Default::default();
+        let state = KimiAttnResBlockState::<TestBackend>::from_parts_unchecked(
+            vec![
+                Tensor::zeros([1, 2, 4], &device),
+                Tensor::zeros([1, 3, 4], &device),
+            ],
+            Some(Tensor::zeros([1, 2, 4], &device)),
+        );
+
+        state.validate_or_panic();
     }
 }

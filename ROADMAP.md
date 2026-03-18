@@ -109,7 +109,8 @@ Missing:
 - Baseline parity.
 - Full public-checkpoint compatibility or parity claims for baseline Kimi or
   AttnRes-Kimi.
-- RFC 0005 validation and benchmark work for AttnRes-Kimi.
+- Public/Hugging Face-dependent RFC 0005 gates beyond the reduced local Gate
+  4/5/7 harnesses now in this repo.
 - Stable 1.0 API guarantees.
 
 Fragile:
@@ -120,7 +121,8 @@ Fragile:
 
 Performance ceilings:
 
-- Only small local benchmarks exist today.
+- Only small local benchmarks exist today, including reduced baseline Kimi and
+  AttnRes-Kimi benchmark scaffolding.
 - No KV-cache or long-context serving path.
 
 Operational knowledge still implicit:

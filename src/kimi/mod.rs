@@ -11,9 +11,12 @@
 //! - RFC 0004 AttnRes-Kimi execution scaffolding with a separate model/layer
 //!   path that preserves baseline Kimi sublayer selection while inserting two
 //!   AttnRes operations per decoder layer.
+//! - RFC 0005 local validation/benchmark scaffolding: Gate 4 functional tests,
+//!   reduced-config Gate 5 hidden/logit agreement, and reduced local benchmark
+//!   groups for baseline Kimi plus AttnRes-Kimi.
 //!
 //! Baseline parity, full payload loading/parity claims, public-checkpoint
-//! compatibility, optimized kernels, and RFC 0005 validation/benchmark work
+//! compatibility, optimized kernels, and public Hugging Face/Python parity work
 //! remain deferred.
 
 pub mod attention;

@@ -89,7 +89,7 @@ completed blocks
 - `src/kimi/`
   - RFC 0001 artifact understanding, RFC 0002 baseline Kimi scaffolding, and
     RFC 0003 import-planning/report scaffolding plus RFC 0004 AttnRes-Kimi
-    execution scaffolding.
+    execution scaffolding and RFC 0005 local validation/benchmark harnesses.
   - Parses and validates Hugging Face-style Kimi config metadata.
   - Decodes 1-based layer schedules into typed zero-based internal schedules.
   - Instantiates a separate baseline `KimiLinearModel` rather than mutating the
@@ -104,8 +104,10 @@ completed blocks
   - Parses shard-index metadata, resolves tensor-name to shard paths, and emits
     explicit tensor-to-module coverage reports plus selected-layer/full shard
     plans.
-  - Still does not provide full tensor payload loading/parity for public Kimi
-    checkpoints, baseline parity claims, or RFC 0005 benchmark validation.
+  - Runs local reduced-config Gate 4/5 checks plus reduced local benchmark
+    groups, but still does not provide full tensor payload loading/parity for
+    public Kimi checkpoints, baseline parity claims, Python/Hugging Face
+    reference parity, or reportable benchmark conclusions.
 
 ## Invariants
 

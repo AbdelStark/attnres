@@ -8,8 +8,10 @@ now includes RFC 0001 artifact understanding, RFC 0002 baseline Kimi Linear
 execution scaffolding, RFC 0003 checkpoint-import scaffolding for shard index
 inspection, tensor coverage reporting, selected-layer/full shard planning, and
 explicit dtype policy, plus RFC 0004 AttnRes-Kimi execution scaffolding with a
-separate model/layer/state path. Baseline parity, public-checkpoint parity, and
-RFC 0005 validation/benchmark work are still deferred.
+separate model/layer/state path. RFC 0005 is now partially executable in-repo:
+Gate 4 functional validation, reduced-config Gate 5 numerical agreement, and
+reduced local benchmark scaffolding. Baseline parity, public-checkpoint parity,
+and Hugging Face/Python-dependent validation still remain deferred.
 
 - `specs/kimi-real-model-integration.md`: top-level specification for running
   `attnres` on a real model architecture, with Kimi Linear as the first target.

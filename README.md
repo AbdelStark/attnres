@@ -58,7 +58,12 @@ Known limitations:
   either baseline Kimi or AttnRes-Kimi are still deferred.
 - No reference-parity harness, validated public-checkpoint hot swap, or
   optimized KDA kernels are shipped yet.
-- RFC 0005 validation and benchmark work is still deferred.
+- RFC 0005 now has an executable in-repo slice only: Gate 4 functional
+  validation, reduced-config Gate 5 hidden/logit agreement tests, and reduced
+  local benchmark scaffolding for baseline Kimi plus AttnRes-Kimi.
+- Hugging Face/Python parity work, public-checkpoint validation, training
+  stability validation, and any benchmark conclusions beyond those reduced
+  local harnesses are still deferred.
 - No compatibility promise for a stable 1.0 public API yet.
 - No dedicated formal spec document is checked into this repository today.
 
@@ -162,7 +167,11 @@ support" claim.
   cache-vs-block-state handling, sublayer-space block boundaries, and
   reduced-config two-phase equivalence coverage. Baseline parity, public
   checkpoint compatibility, and optimized kernels remain deferred.
-- Phase E: benchmarks and research validation. Deferred in RFC 0005.
+- Phase E: validation and benchmark scaffolding. Partially implemented in this
+  checkout for local reduced configs only: Gate 4 functional tests, reduced
+  Gate 5 numerical agreement checks, and reduced local benchmark groups. Public
+  checkpoint parity, Python/Hugging Face reference work, training validation,
+  and reportable benchmark claims remain deferred.
 
 See [docs/rfcs/0001-real-model-milestone-scope.md](docs/rfcs/0001-real-model-milestone-scope.md)
 for the accepted sequencing and scope boundaries.

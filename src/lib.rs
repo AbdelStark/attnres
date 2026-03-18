@@ -12,8 +12,11 @@
 //! 0002 baseline Kimi Linear execution scaffolding plus RFC 0003 checkpoint
 //! import scaffolding for tensor-name coverage and shard planning, plus RFC
 //! 0004 AttnRes-Kimi execution scaffolding via a separate
-//! `kimi::KimiAttnResModel` path. Baseline parity, public-checkpoint parity,
-//! and RFC 0005 validation/benchmark work remain deferred.
+//! `kimi::KimiAttnResModel` path. This checkout now also includes an executable
+//! local RFC 0005 slice: Gate 4 functional validation, reduced-config Gate 5
+//! numerical agreement tests, and reduced local benchmark scaffolding. Baseline
+//! parity, public-checkpoint parity, and Hugging Face/Python-dependent gates
+//! remain deferred.
 //!
 //! ## Quick Start
 //!

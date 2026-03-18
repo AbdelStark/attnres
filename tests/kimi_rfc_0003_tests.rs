@@ -301,6 +301,44 @@ fn kimi_rfc_0003_duplicate_and_missing_coverage_errors_are_typed() {
 }
 
 #[test]
+fn kimi_rfc_0003_plan_loadability_stays_honest_about_duplicate_and_missing_artifacts() {
+    let understanding = understanding_from(&reduced_config_json(), &supported_slice_index_json());
+    let plan = understanding.try_full_plan().unwrap();
+
+    let mut duplicate_plan = plan.clone();
+    duplicate_plan
+        .coverage
+        .duplicate_tensors
+        .push(attnres::kimi::KimiDuplicateTensor {
+            tensor_name: "lm_head.weight".to_string(),
+            modules: vec![KimiModuleRef::LmHead, KimiModuleRef::LmHead],
+        });
+    assert!(matches!(
+        duplicate_plan.try_require_loadable(),
+        Err(KimiImportCoverageError::DuplicateRequiredTensor { .. })
+    ));
+
+    let mut missing_plan = plan;
+    missing_plan
+        .coverage
+        .missing_tensors
+        .push(attnres::kimi::KimiMissingTensor {
+            tensor_name: "model.layers.3.self_attn.q_proj.weight".to_string(),
+            module: KimiModuleRef::DecoderLayer {
+                layer_idx: 3,
+                component: attnres::kimi::KimiLayerModuleRef::Attention {
+                    kind: attnres::kimi::KimiAttentionLayerKind::FullAttention,
+                },
+            },
+            local_parameter_paths: vec!["layers[3].attention.q_proj.weight".to_string()],
+        });
+    assert!(matches!(
+        missing_plan.try_require_loadable(),
+        Err(KimiImportCoverageError::MissingRequiredTensor { .. })
+    ));
+}
+
+#[test]
 fn kimi_rfc_0003_smoke_resolves_slice_shards_without_fake_loading() {
     let temp_dir = unique_temp_dir();
     fs::create_dir_all(&temp_dir).unwrap();

@@ -9,6 +9,28 @@ Depends on: RFC 0001, RFC 0002, RFC 0003, RFC 0004
 Define the validation ladder for the Kimi real-model milestone. The main goal
 is to make incorrect implementations fail early and loudly.
 
+## Implementation Status In This Checkout
+
+The repository now executes a narrow local subset of this RFC:
+
+- Gate 4 is executable in-repo through AttnRes-Kimi tests for dual AttnRes
+  placement, mixed MLA/KDA block-state progression, embedding-block retention,
+  and loud invariant-panics on corrupted internal state.
+- Gate 5 is executable in-repo only for reduced local configs through
+  deterministic-seed tests that compare standard and two-phase hidden states
+  plus final logits.
+- Gate 7 now has reduced local benchmark scaffolding for baseline Kimi
+  forward/cached-forward and AttnRes-Kimi forward/two-phase runs, with
+  benchmark ids that encode backend/model/sequence metadata.
+
+The following remain deferred and should not be implied by local results:
+
+- Gate 1 baseline parity against a Python/Hugging Face reference.
+- Gate 2 selected-layer public-checkpoint parity.
+- Gate 3 end-to-end public-checkpoint smoke.
+- Gate 6 training-stability validation.
+- Any benchmark claim beyond the reduced local harnesses above.
+
 ## Principles
 
 - correctness before throughput

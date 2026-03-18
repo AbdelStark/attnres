@@ -353,4 +353,21 @@ mod tests {
         assert!(!layer0.starts_new_block_before_attn());
         assert!(layer0.starts_new_block_before_mlp());
     }
+
+    #[test]
+    #[should_panic(expected = "completed block 1 shape mismatch")]
+    fn attn_res_kimi_layer_panics_loudly_when_previous_layer_state_is_corrupted() {
+        let device = Default::default();
+        let config = reduced_attn_res_config();
+        let layer1 = config.init_layer::<TestBackend>(1, &device);
+        let corrupted_state = KimiAttnResBlockState::from_parts_unchecked(
+            vec![
+                Tensor::zeros([1, 4, 16], &device),
+                Tensor::zeros([1, 5, 16], &device),
+            ],
+            Some(Tensor::zeros([1, 4, 16], &device)),
+        );
+
+        let _ = layer1.forward(corrupted_state);
+    }
 }
