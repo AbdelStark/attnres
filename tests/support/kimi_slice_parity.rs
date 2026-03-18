@@ -1,12 +1,11 @@
 #![allow(dead_code)]
 
 use attnres::kimi::{
-    KimiArtifactUnderstanding, KimiBaselineSliceParityArtifactSpec, KimiBaselineSliceParityFixture,
-    KimiBaselineSliceParityHiddenState, KimiBaselineSliceParityPromptResult,
-    KimiBaselineSliceParityPromptSpec, KimiBaselineSliceParitySliceSpec,
-    KimiBaselineSliceParityTensor, KimiBaselineSliceParityToleranceSpec, KimiImportSelection,
-    KimiLinearModel, KIMI_BASELINE_SLICE_PARITY_FILENAME, KIMI_BASELINE_SLICE_PARITY_KIND,
-    KIMI_BASELINE_SLICE_PARITY_VERSION,
+    KimiArtifactUnderstanding, KimiBaselineSliceParityFixture, KimiBaselineSliceParityHiddenState,
+    KimiBaselineSliceParityPromptResult, KimiBaselineSliceParityPromptSpec,
+    KimiBaselineSliceParityTensor, KimiBaselineSliceParityToleranceSpec,
+    KimiBaselineSliceRequestManifest, KimiBaselineSliceRequestSpec, KimiImportSelection,
+    KimiLinearModel, KIMI_BASELINE_SLICE_PARITY_FILENAME, KIMI_BASELINE_SLICE_REQUEST_FILENAME,
 };
 use burn::prelude::*;
 use serde_json::Value;
@@ -23,6 +22,12 @@ pub struct LocalSliceParityFixtureFile {
     path: PathBuf,
 }
 
+#[derive(Debug)]
+pub struct LocalSliceRequestManifestFile {
+    root_dir: PathBuf,
+    path: PathBuf,
+}
+
 static LOCAL_SLICE_PARITY_COUNTER: AtomicU64 = AtomicU64::new(0);
 const LOCAL_SLICE_PARITY_SEED: u64 = 20260318;
 
@@ -32,7 +37,19 @@ impl LocalSliceParityFixtureFile {
     }
 }
 
+impl LocalSliceRequestManifestFile {
+    pub fn path(&self) -> &Path {
+        &self.path
+    }
+}
+
 impl Drop for LocalSliceParityFixtureFile {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root_dir);
+    }
+}
+
+impl Drop for LocalSliceRequestManifestFile {
     fn drop(&mut self) {
         let _ = fs::remove_dir_all(&self.root_dir);
     }
@@ -52,62 +69,8 @@ pub fn build_valid_fixture(
     selection: KimiImportSelection,
     selected_hidden_layers: &[usize],
 ) -> KimiBaselineSliceParityFixture {
-    let understanding = KimiArtifactUnderstanding::load_from_dir(artifact_dir).unwrap();
-    let plan = understanding.try_slice_plan(selection.clone()).unwrap();
-    plan.try_require_loadable().unwrap();
-
-    let device = Default::default();
-    TestBackend::seed(&device, LOCAL_SLICE_PARITY_SEED);
-    let model: KimiLinearModel<TestBackend> = understanding
-        .try_init_baseline_model_from_dir(artifact_dir, selection.clone(), &device)
-        .unwrap();
-
-    let prompts = vec![
-        KimiBaselineSliceParityPromptSpec {
-            name: "ascending_len4".to_string(),
-            input_ids: vec![0, 1, 2, 3],
-        },
-        KimiBaselineSliceParityPromptSpec {
-            name: "repeat_len3".to_string(),
-            input_ids: vec![5, 5, 1],
-        },
-    ];
-    let prompt_results = prompts
-        .iter()
-        .map(|prompt| build_prompt_result(&model, prompt, selected_hidden_layers, &device))
-        .collect::<Vec<_>>();
-
-    KimiBaselineSliceParityFixture {
-        kind: KIMI_BASELINE_SLICE_PARITY_KIND.to_string(),
-        version: KIMI_BASELINE_SLICE_PARITY_VERSION,
-        seed: LOCAL_SLICE_PARITY_SEED,
-        artifact: KimiBaselineSliceParityArtifactSpec {
-            model_type: understanding.config.model_type.clone(),
-            dtype: understanding.config.dtype.clone(),
-            num_hidden_layers: understanding.config.num_hidden_layers,
-            hidden_size: understanding.config.hidden_size,
-            vocab_size: understanding.config.vocab_size,
-        },
-        slice: KimiBaselineSliceParitySliceSpec {
-            import_selection: selection,
-            selected_hidden_layers: selected_hidden_layers.to_vec(),
-            requested_modules: plan.selected_modules,
-            required_tensors: plan
-                .coverage
-                .mapped_tensors
-                .iter()
-                .map(|mapping| mapping.tensor_name.clone())
-                .collect(),
-            tolerances: KimiBaselineSliceParityToleranceSpec {
-                metric: "max_abs_diff".to_string(),
-                runtime_dtype: "float32".to_string(),
-                logits_max_abs_diff: 1e-6,
-                hidden_state_max_abs_diff: 1e-6,
-            },
-        },
-        prompts,
-        prompt_results,
-    }
+    let manifest = build_valid_manifest(artifact_dir, selection, selected_hidden_layers);
+    build_valid_fixture_from_manifest(artifact_dir, &manifest)
 }
 
 pub fn write_fixture(fixture: &KimiBaselineSliceParityFixture) -> LocalSliceParityFixtureFile {
@@ -118,12 +81,87 @@ pub fn write_fixture_value(value: &Value) -> LocalSliceParityFixtureFile {
     write_fixture_json(&serde_json::to_string_pretty(value).unwrap())
 }
 
+pub fn write_valid_manifest(
+    artifact_dir: &Path,
+    selection: KimiImportSelection,
+    selected_hidden_layers: &[usize],
+) -> LocalSliceRequestManifestFile {
+    let manifest = build_valid_manifest(artifact_dir, selection, selected_hidden_layers);
+    write_manifest(&manifest)
+}
+
+pub fn build_valid_manifest(
+    artifact_dir: &Path,
+    selection: KimiImportSelection,
+    selected_hidden_layers: &[usize],
+) -> KimiBaselineSliceRequestManifest {
+    let understanding = KimiArtifactUnderstanding::load_from_dir(artifact_dir).unwrap();
+    understanding
+        .try_build_baseline_slice_request_manifest(valid_request_spec(
+            selection,
+            selected_hidden_layers,
+        ))
+        .unwrap()
+}
+
+pub fn build_valid_fixture_from_manifest(
+    artifact_dir: &Path,
+    manifest: &KimiBaselineSliceRequestManifest,
+) -> KimiBaselineSliceParityFixture {
+    let understanding = KimiArtifactUnderstanding::load_from_dir(artifact_dir).unwrap();
+    let device = Default::default();
+    TestBackend::seed(&device, manifest.seed);
+    let model: KimiLinearModel<TestBackend> = understanding
+        .try_init_baseline_model_from_dir(
+            artifact_dir,
+            manifest.slice.import_selection.clone(),
+            &device,
+        )
+        .unwrap();
+    let prompt_results = manifest
+        .prompts
+        .iter()
+        .map(|prompt| {
+            build_prompt_result(
+                &model,
+                prompt,
+                &manifest.slice.selected_hidden_layers,
+                &device,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    manifest.clone().try_into_fixture(prompt_results).unwrap()
+}
+
+pub fn write_manifest(
+    manifest: &KimiBaselineSliceRequestManifest,
+) -> LocalSliceRequestManifestFile {
+    let root_dir = unique_temp_dir();
+    fs::create_dir_all(&root_dir).unwrap();
+    let path = root_dir.join(KIMI_BASELINE_SLICE_REQUEST_FILENAME);
+    manifest.write(&path).unwrap();
+    LocalSliceRequestManifestFile { root_dir, path }
+}
+
+pub fn write_manifest_value(value: &Value) -> LocalSliceRequestManifestFile {
+    write_manifest_json(&serde_json::to_string_pretty(value).unwrap())
+}
+
 fn write_fixture_json(json: &str) -> LocalSliceParityFixtureFile {
     let root_dir = unique_temp_dir();
     fs::create_dir_all(&root_dir).unwrap();
     let path = root_dir.join(KIMI_BASELINE_SLICE_PARITY_FILENAME);
     fs::write(&path, json).unwrap();
     LocalSliceParityFixtureFile { root_dir, path }
+}
+
+fn write_manifest_json(json: &str) -> LocalSliceRequestManifestFile {
+    let root_dir = unique_temp_dir();
+    fs::create_dir_all(&root_dir).unwrap();
+    let path = root_dir.join(KIMI_BASELINE_SLICE_REQUEST_FILENAME);
+    fs::write(&path, json).unwrap();
+    LocalSliceRequestManifestFile { root_dir, path }
 }
 
 fn build_prompt_result(
@@ -172,6 +210,33 @@ fn tensor_to_fixture<const D: usize>(
     let numel = dims.iter().product::<usize>();
     let values = tensor.reshape([numel]).into_data().to_vec().unwrap();
     KimiBaselineSliceParityTensor { dims, values }
+}
+
+fn valid_request_spec(
+    selection: KimiImportSelection,
+    selected_hidden_layers: &[usize],
+) -> KimiBaselineSliceRequestSpec {
+    KimiBaselineSliceRequestSpec {
+        seed: LOCAL_SLICE_PARITY_SEED,
+        import_selection: selection,
+        selected_hidden_layers: selected_hidden_layers.to_vec(),
+        prompts: vec![
+            KimiBaselineSliceParityPromptSpec {
+                name: "ascending_len4".to_string(),
+                input_ids: vec![0, 1, 2, 3],
+            },
+            KimiBaselineSliceParityPromptSpec {
+                name: "repeat_len3".to_string(),
+                input_ids: vec![5, 5, 1],
+            },
+        ],
+        tolerances: KimiBaselineSliceParityToleranceSpec {
+            metric: "max_abs_diff".to_string(),
+            runtime_dtype: "float32".to_string(),
+            logits_max_abs_diff: 1e-6,
+            hidden_state_max_abs_diff: 1e-6,
+        },
+    }
 }
 
 fn unique_temp_dir() -> PathBuf {

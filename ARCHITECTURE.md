@@ -109,17 +109,20 @@ completed blocks
     into `KimiLinearModel`, via a local sharded-`safetensors` baseline-only
     path for the supported tensor subset.
   - Adds `src/kimi/slice_parity.rs` as a separate baseline-only Gate 2 fixture
-    consumption path: it validates external baseline slice fixtures against the
-    current `KimiLinearModel` shard plan and compares logits plus selected
-    hidden states after local payload loading, without crossing into
+    handoff path: it emits machine-readable `baseline-slice-request.json`
+    manifests for `KimiLinearModel`, validates those manifests against the
+    current shard plan, consumes externally generated
+    `baseline-slice-parity.json` fixtures, and can require exact
+    manifest-to-fixture metadata agreement before comparing logits plus
+    selected hidden states after local payload loading, without crossing into
     `KimiAttnResModel` or the reference `AttnResTransformer`.
   - Runs a local baseline-only Gate 1 fixture-backed parity harness, a local
     Gate 2 payload-loading harness for supported baseline tensors, a local Gate
-    2 external-fixture consumption harness for the same supported baseline
-    subset, Gate 4/5 checks, and reduced local benchmark groups, but still
-    does not provide public-checkpoint fixture generation/parity,
-    AttnRes-Kimi payload loading, Python/Hugging Face reference parity, or
-    reportable benchmark conclusions.
+    2 external-generator handoff plus external-fixture consumption harness for
+    the same supported baseline subset, Gate 4/5 checks, and reduced local
+    benchmark groups, but still does not provide public-checkpoint fixture
+    generation/parity, AttnRes-Kimi payload loading, Python/Hugging Face
+    reference parity, or reportable benchmark conclusions.
 
 ## Invariants
 

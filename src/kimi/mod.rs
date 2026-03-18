@@ -15,9 +15,10 @@
 //!   fixture-backed parity for a deterministic tiny-random Kimi-style bundle,
 //!   baseline-only local sharded-payload loading for the supported tensor
 //!   subset, baseline-only Gate 2 external slice-fixture consumption for local
-//!   sharded artifacts, Gate 4 functional tests, reduced-config Gate 5
-//!   hidden/logit agreement, and reduced local benchmark groups for baseline
-//!   Kimi plus AttnRes-Kimi.
+//!   sharded artifacts, baseline-only Gate 2 external-generator handoff
+//!   manifests for that same supported subset, Gate 4 functional tests,
+//!   reduced-config Gate 5 hidden/logit agreement, and reduced local benchmark
+//!   groups for baseline Kimi plus AttnRes-Kimi.
 //!
 //! Public-checkpoint tensor parity generation, AttnRes-Kimi payload loading,
 //! optimized kernels, and public Hugging Face/Python execution remain
@@ -74,10 +75,15 @@ pub use schedule::{
 };
 pub use slice_parity::{
     compare_baseline_slice_parity_fixture, compare_baseline_slice_parity_fixture_from_dir,
+    compare_baseline_slice_parity_fixture_with_manifest,
+    compare_baseline_slice_parity_fixture_with_manifest_from_dir,
     KimiBaselineSliceParityArtifactSpec, KimiBaselineSliceParityError,
     KimiBaselineSliceParityFixture, KimiBaselineSliceParityHiddenState,
     KimiBaselineSliceParityPromptResult, KimiBaselineSliceParityPromptSpec,
     KimiBaselineSliceParitySliceSpec, KimiBaselineSliceParityTensor,
-    KimiBaselineSliceParityToleranceSpec, KIMI_BASELINE_SLICE_PARITY_FILENAME,
+    KimiBaselineSliceParityToleranceSpec, KimiBaselineSliceRequestManifest,
+    KimiBaselineSliceRequestSpec, KIMI_BASELINE_SLICE_PARITY_FILENAME,
     KIMI_BASELINE_SLICE_PARITY_KIND, KIMI_BASELINE_SLICE_PARITY_VERSION,
+    KIMI_BASELINE_SLICE_REQUEST_FILENAME, KIMI_BASELINE_SLICE_REQUEST_KIND,
+    KIMI_BASELINE_SLICE_REQUEST_VERSION,
 };

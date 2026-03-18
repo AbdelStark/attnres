@@ -11,6 +11,9 @@ use crate::kimi::import::{
 use crate::kimi::model::KimiLinearModel;
 use crate::kimi::payload::KimiBaselinePayloadError;
 
+pub const KIMI_BASELINE_SLICE_REQUEST_FILENAME: &str = "baseline-slice-request.json";
+pub const KIMI_BASELINE_SLICE_REQUEST_KIND: &str = "attnres.kimi.baseline_slice_request";
+pub const KIMI_BASELINE_SLICE_REQUEST_VERSION: u32 = 1;
 pub const KIMI_BASELINE_SLICE_PARITY_FILENAME: &str = "baseline-slice-parity.json";
 pub const KIMI_BASELINE_SLICE_PARITY_KIND: &str = "attnres.kimi.baseline_slice_parity";
 pub const KIMI_BASELINE_SLICE_PARITY_VERSION: u32 = 1;
@@ -37,6 +40,16 @@ pub struct KimiBaselineSliceParityHiddenState {
 pub struct KimiBaselineSliceParityPromptSpec {
     pub name: String,
     pub input_ids: Vec<usize>,
+}
+
+/// Caller-provided slice request before module/tensor expansion.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KimiBaselineSliceRequestSpec {
+    pub seed: u64,
+    pub import_selection: KimiImportSelection,
+    pub selected_hidden_layers: Vec<usize>,
+    pub prompts: Vec<KimiBaselineSliceParityPromptSpec>,
+    pub tolerances: KimiBaselineSliceParityToleranceSpec,
 }
 
 /// One prompt result produced by an external baseline reference.
@@ -77,6 +90,17 @@ pub struct KimiBaselineSliceParitySliceSpec {
     pub tolerances: KimiBaselineSliceParityToleranceSpec,
 }
 
+/// Machine-readable request manifest emitted for an external baseline reference.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct KimiBaselineSliceRequestManifest {
+    pub kind: String,
+    pub version: u32,
+    pub seed: u64,
+    pub artifact: KimiBaselineSliceParityArtifactSpec,
+    pub slice: KimiBaselineSliceParitySliceSpec,
+    pub prompts: Vec<KimiBaselineSliceParityPromptSpec>,
+}
+
 /// Baseline-only external-reference fixture consumed by the local parity harness.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KimiBaselineSliceParityFixture {
@@ -92,6 +116,24 @@ pub struct KimiBaselineSliceParityFixture {
 /// Typed failures for baseline-only Gate 2 slice parity fixture loading/comparison.
 #[derive(Debug, Clone, PartialEq)]
 pub enum KimiBaselineSliceParityError {
+    ManifestReadFailed {
+        path: String,
+        detail: String,
+    },
+    ManifestWriteFailed {
+        path: String,
+        detail: String,
+    },
+    ManifestParseFailed {
+        path: String,
+        detail: String,
+    },
+    UnexpectedManifestKind {
+        kind: String,
+    },
+    UnsupportedManifestVersion {
+        version: u32,
+    },
     ReadFailed {
         path: String,
         detail: String,
@@ -129,6 +171,16 @@ pub enum KimiBaselineSliceParityError {
     },
     MissingRequiredTensor {
         tensor_name: String,
+    },
+    ManifestFieldMismatch {
+        field: String,
+        expected: String,
+        actual: String,
+    },
+    FixtureManifestMismatch {
+        field: String,
+        expected: String,
+        actual: String,
     },
     UnsupportedToleranceMetadata {
         field: String,
@@ -184,6 +236,25 @@ pub enum KimiBaselineSliceParityError {
 impl Display for KimiBaselineSliceParityError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::ManifestReadFailed { path, detail } => {
+                write!(f, "failed to read baseline slice request manifest '{path}': {detail}")
+            }
+            Self::ManifestWriteFailed { path, detail } => write!(
+                f,
+                "failed to write baseline slice request manifest '{path}': {detail}"
+            ),
+            Self::ManifestParseFailed { path, detail } => write!(
+                f,
+                "failed to parse baseline slice request manifest '{path}': {detail}"
+            ),
+            Self::UnexpectedManifestKind { kind } => write!(
+                f,
+                "expected baseline slice request manifest kind '{KIMI_BASELINE_SLICE_REQUEST_KIND}', got '{kind}'"
+            ),
+            Self::UnsupportedManifestVersion { version } => write!(
+                f,
+                "expected baseline slice request manifest version {KIMI_BASELINE_SLICE_REQUEST_VERSION}, got {version}"
+            ),
             Self::ReadFailed { path, detail } => {
                 write!(f, "failed to read baseline slice parity fixture '{path}': {detail}")
             }
@@ -233,6 +304,22 @@ impl Display for KimiBaselineSliceParityError {
             Self::MissingRequiredTensor { tensor_name } => write!(
                 f,
                 "fixture omitted required baseline tensor '{tensor_name}' for the selected slice"
+            ),
+            Self::ManifestFieldMismatch {
+                field,
+                expected,
+                actual,
+            } => write!(
+                f,
+                "baseline slice request manifest field '{field}' expected '{expected}', got '{actual}'"
+            ),
+            Self::FixtureManifestMismatch {
+                field,
+                expected,
+                actual,
+            } => write!(
+                f,
+                "baseline slice parity fixture field '{field}' expected '{expected}' from the request manifest, got '{actual}'"
             ),
             Self::UnsupportedToleranceMetadata {
                 field,
@@ -356,6 +443,171 @@ impl KimiBaselineSliceParityToleranceSpec {
     }
 }
 
+impl KimiBaselineSliceRequestSpec {
+    pub fn try_validate(
+        &self,
+        num_hidden_layers: usize,
+    ) -> Result<(), KimiBaselineSliceParityError> {
+        self.tolerances.try_validate()?;
+        self.import_selection.try_validate(num_hidden_layers)?;
+        validate_selected_hidden_layers(
+            num_hidden_layers,
+            &self.import_selection,
+            &self.selected_hidden_layers,
+        )?;
+        Ok(())
+    }
+}
+
+impl KimiArtifactUnderstanding {
+    pub fn try_build_baseline_slice_request_manifest(
+        &self,
+        request: KimiBaselineSliceRequestSpec,
+    ) -> Result<KimiBaselineSliceRequestManifest, KimiBaselineSliceParityError> {
+        request.try_validate(self.config.num_hidden_layers)?;
+
+        let plan = self.try_slice_plan(request.import_selection.clone())?;
+        plan.try_require_loadable()?;
+        let requested_modules = plan.selected_modules.clone();
+        let required_tensors = required_tensor_names(&plan);
+
+        let manifest = KimiBaselineSliceRequestManifest {
+            kind: KIMI_BASELINE_SLICE_REQUEST_KIND.to_string(),
+            version: KIMI_BASELINE_SLICE_REQUEST_VERSION,
+            seed: request.seed,
+            artifact: baseline_slice_artifact_spec(&self.config),
+            slice: KimiBaselineSliceParitySliceSpec {
+                import_selection: request.import_selection,
+                selected_hidden_layers: request.selected_hidden_layers,
+                requested_modules,
+                required_tensors,
+                tolerances: request.tolerances,
+            },
+            prompts: request.prompts,
+        };
+        manifest.try_validate_against_understanding(self)?;
+        Ok(manifest)
+    }
+}
+
+impl KimiBaselineSliceRequestManifest {
+    pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, KimiBaselineSliceParityError> {
+        let path = path.as_ref();
+        let json = std::fs::read_to_string(path).map_err(|err| {
+            KimiBaselineSliceParityError::ManifestReadFailed {
+                path: path.display().to_string(),
+                detail: err.to_string(),
+            }
+        })?;
+        let manifest: Self = serde_json::from_str(&json).map_err(|err| {
+            KimiBaselineSliceParityError::ManifestParseFailed {
+                path: path.display().to_string(),
+                detail: err.to_string(),
+            }
+        })?;
+        manifest.try_validate_static()?;
+        Ok(manifest)
+    }
+
+    pub fn write<P: AsRef<Path>>(&self, path: P) -> Result<(), KimiBaselineSliceParityError> {
+        let path = path.as_ref();
+        let json = serde_json::to_string_pretty(self).expect("manifest serialization must succeed");
+        std::fs::write(path, json).map_err(|err| {
+            KimiBaselineSliceParityError::ManifestWriteFailed {
+                path: path.display().to_string(),
+                detail: err.to_string(),
+            }
+        })
+    }
+
+    pub fn try_validate_static(&self) -> Result<(), KimiBaselineSliceParityError> {
+        if self.kind != KIMI_BASELINE_SLICE_REQUEST_KIND {
+            return Err(KimiBaselineSliceParityError::UnexpectedManifestKind {
+                kind: self.kind.clone(),
+            });
+        }
+        if self.version != KIMI_BASELINE_SLICE_REQUEST_VERSION {
+            return Err(KimiBaselineSliceParityError::UnsupportedManifestVersion {
+                version: self.version,
+            });
+        }
+
+        KimiBaselineSliceRequestSpec {
+            seed: self.seed,
+            import_selection: self.slice.import_selection.clone(),
+            selected_hidden_layers: self.slice.selected_hidden_layers.clone(),
+            prompts: self.prompts.clone(),
+            tolerances: self.slice.tolerances.clone(),
+        }
+        .try_validate(self.artifact.num_hidden_layers)
+    }
+
+    pub fn try_into_fixture(
+        self,
+        prompt_results: Vec<KimiBaselineSliceParityPromptResult>,
+    ) -> Result<KimiBaselineSliceParityFixture, KimiBaselineSliceParityError> {
+        let fixture = KimiBaselineSliceParityFixture {
+            kind: KIMI_BASELINE_SLICE_PARITY_KIND.to_string(),
+            version: KIMI_BASELINE_SLICE_PARITY_VERSION,
+            seed: self.seed,
+            artifact: self.artifact,
+            slice: self.slice,
+            prompts: self.prompts,
+            prompt_results,
+        };
+        fixture.try_validate_static()?;
+        Ok(fixture)
+    }
+
+    fn try_validate_against_understanding(
+        &self,
+        understanding: &KimiArtifactUnderstanding,
+    ) -> Result<(), KimiBaselineSliceParityError> {
+        let expected_artifact = baseline_slice_artifact_spec(&understanding.config);
+        compare_manifest_field(
+            "artifact.model_type",
+            &self.artifact.model_type,
+            &expected_artifact.model_type,
+        )?;
+        compare_manifest_field(
+            "artifact.dtype",
+            &self.artifact.dtype,
+            &expected_artifact.dtype,
+        )?;
+        compare_manifest_field(
+            "artifact.num_hidden_layers",
+            &self.artifact.num_hidden_layers,
+            &expected_artifact.num_hidden_layers,
+        )?;
+        compare_manifest_field(
+            "artifact.hidden_size",
+            &self.artifact.hidden_size,
+            &expected_artifact.hidden_size,
+        )?;
+        compare_manifest_field(
+            "artifact.vocab_size",
+            &self.artifact.vocab_size,
+            &expected_artifact.vocab_size,
+        )?;
+
+        let plan = understanding.try_slice_plan(self.slice.import_selection.clone())?;
+        plan.try_require_loadable()?;
+
+        compare_manifest_field(
+            "slice.requested_modules",
+            &self.slice.requested_modules,
+            &plan.selected_modules,
+        )?;
+        compare_manifest_field(
+            "slice.required_tensors",
+            &self.slice.required_tensors,
+            &required_tensor_names(&plan),
+        )?;
+
+        Ok(())
+    }
+}
+
 impl KimiBaselineSliceParityFixture {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, KimiBaselineSliceParityError> {
         let path = path.as_ref();
@@ -397,6 +649,102 @@ impl KimiBaselineSliceParityFixture {
             &self.slice.selected_hidden_layers,
         )?;
         self.try_validate_prompt_metadata()?;
+        Ok(())
+    }
+
+    pub fn try_validate_matches_manifest(
+        &self,
+        manifest: &KimiBaselineSliceRequestManifest,
+    ) -> Result<(), KimiBaselineSliceParityError> {
+        self.try_validate_static()?;
+        manifest.try_validate_static()?;
+
+        compare_fixture_manifest_field("seed", &self.seed, &manifest.seed)?;
+        compare_fixture_manifest_field(
+            "artifact.model_type",
+            &self.artifact.model_type,
+            &manifest.artifact.model_type,
+        )?;
+        compare_fixture_manifest_field(
+            "artifact.dtype",
+            &self.artifact.dtype,
+            &manifest.artifact.dtype,
+        )?;
+        compare_fixture_manifest_field(
+            "artifact.num_hidden_layers",
+            &self.artifact.num_hidden_layers,
+            &manifest.artifact.num_hidden_layers,
+        )?;
+        compare_fixture_manifest_field(
+            "artifact.hidden_size",
+            &self.artifact.hidden_size,
+            &manifest.artifact.hidden_size,
+        )?;
+        compare_fixture_manifest_field(
+            "artifact.vocab_size",
+            &self.artifact.vocab_size,
+            &manifest.artifact.vocab_size,
+        )?;
+        compare_fixture_manifest_field(
+            "slice.import_selection",
+            &self.slice.import_selection,
+            &manifest.slice.import_selection,
+        )?;
+        compare_fixture_manifest_field(
+            "slice.selected_hidden_layers",
+            &self.slice.selected_hidden_layers,
+            &manifest.slice.selected_hidden_layers,
+        )?;
+        compare_fixture_manifest_field(
+            "slice.requested_modules",
+            &self.slice.requested_modules,
+            &manifest.slice.requested_modules,
+        )?;
+        compare_fixture_manifest_field(
+            "slice.required_tensors",
+            &self.slice.required_tensors,
+            &manifest.slice.required_tensors,
+        )?;
+        compare_fixture_manifest_field(
+            "slice.tolerances.metric",
+            &self.slice.tolerances.metric,
+            &manifest.slice.tolerances.metric,
+        )?;
+        compare_fixture_manifest_field(
+            "slice.tolerances.runtime_dtype",
+            &self.slice.tolerances.runtime_dtype,
+            &manifest.slice.tolerances.runtime_dtype,
+        )?;
+        compare_fixture_manifest_field(
+            "slice.tolerances.logits_max_abs_diff",
+            &self.slice.tolerances.logits_max_abs_diff,
+            &manifest.slice.tolerances.logits_max_abs_diff,
+        )?;
+        compare_fixture_manifest_field(
+            "slice.tolerances.hidden_state_max_abs_diff",
+            &self.slice.tolerances.hidden_state_max_abs_diff,
+            &manifest.slice.tolerances.hidden_state_max_abs_diff,
+        )?;
+        compare_fixture_manifest_field(
+            "prompts.len",
+            &self.prompts.len(),
+            &manifest.prompts.len(),
+        )?;
+        for (index, (prompt, expected)) in
+            self.prompts.iter().zip(manifest.prompts.iter()).enumerate()
+        {
+            compare_fixture_manifest_field(
+                &format!("prompts[{index}].name"),
+                &prompt.name,
+                &expected.name,
+            )?;
+            compare_fixture_manifest_field(
+                &format!("prompts[{index}].input_ids"),
+                &prompt.input_ids,
+                &expected.input_ids,
+            )?;
+        }
+
         Ok(())
     }
 
@@ -553,16 +901,57 @@ pub fn compare_baseline_slice_parity_fixture<B: Backend, P: AsRef<Path>>(
     let artifact_dir = artifact_dir.as_ref();
     fixture.try_validate_static()?;
     let understanding = KimiArtifactUnderstanding::load_from_dir(artifact_dir)?;
-    fixture.try_validate_against_understanding(&understanding)?;
-
-    B::seed(device, fixture.seed);
-    let model: KimiLinearModel<B> = understanding.try_init_baseline_model_from_dir(
+    compare_baseline_slice_parity_fixture_with_understanding::<B>(
         artifact_dir,
-        fixture.slice.import_selection.clone(),
+        &understanding,
+        fixture,
         device,
-    )?;
+    )
+}
 
-    compare_model_to_fixture(&model, fixture, device)
+/// Consume an external baseline-only slice request manifest plus a
+/// `baseline-slice-parity.json` fixture and compare the fixture against the
+/// locally loadable `KimiLinearModel` slice requested by that manifest.
+pub fn compare_baseline_slice_parity_fixture_with_manifest_from_dir<
+    B: Backend,
+    P: AsRef<Path>,
+    Q: AsRef<Path>,
+    R: AsRef<Path>,
+>(
+    artifact_dir: P,
+    manifest_path: Q,
+    fixture_path: R,
+    device: &B::Device,
+) -> Result<(), KimiBaselineSliceParityError> {
+    let manifest = KimiBaselineSliceRequestManifest::load(manifest_path)?;
+    let fixture = KimiBaselineSliceParityFixture::load(fixture_path)?;
+    compare_baseline_slice_parity_fixture_with_manifest::<B, P>(
+        artifact_dir,
+        &manifest,
+        &fixture,
+        device,
+    )
+}
+
+/// Validate a baseline-only slice request manifest plus matching fixture
+/// against a locally loadable sharded artifact using `KimiLinearModel`.
+pub fn compare_baseline_slice_parity_fixture_with_manifest<B: Backend, P: AsRef<Path>>(
+    artifact_dir: P,
+    manifest: &KimiBaselineSliceRequestManifest,
+    fixture: &KimiBaselineSliceParityFixture,
+    device: &B::Device,
+) -> Result<(), KimiBaselineSliceParityError> {
+    let artifact_dir = artifact_dir.as_ref();
+    manifest.try_validate_static()?;
+    let understanding = KimiArtifactUnderstanding::load_from_dir(artifact_dir)?;
+    manifest.try_validate_against_understanding(&understanding)?;
+    fixture.try_validate_matches_manifest(manifest)?;
+    compare_baseline_slice_parity_fixture_with_understanding::<B>(
+        artifact_dir,
+        &understanding,
+        fixture,
+        device,
+    )
 }
 
 fn validate_tolerance_value(field: &str, value: f32) -> Result<(), KimiBaselineSliceParityError> {
@@ -617,6 +1006,40 @@ fn compare_artifact_field(
     Ok(())
 }
 
+fn compare_manifest_field<T: Serialize + PartialEq>(
+    field: &str,
+    actual: &T,
+    expected: &T,
+) -> Result<(), KimiBaselineSliceParityError> {
+    if actual != expected {
+        return Err(KimiBaselineSliceParityError::ManifestFieldMismatch {
+            field: field.to_string(),
+            expected: json_field_value(expected),
+            actual: json_field_value(actual),
+        });
+    }
+    Ok(())
+}
+
+fn compare_fixture_manifest_field<T: Serialize + PartialEq>(
+    field: &str,
+    actual: &T,
+    expected: &T,
+) -> Result<(), KimiBaselineSliceParityError> {
+    if actual != expected {
+        return Err(KimiBaselineSliceParityError::FixtureManifestMismatch {
+            field: field.to_string(),
+            expected: json_field_value(expected),
+            actual: json_field_value(actual),
+        });
+    }
+    Ok(())
+}
+
+fn json_field_value<T: Serialize>(value: &T) -> String {
+    serde_json::to_string(value).expect("slice parity values should serialize to json")
+}
+
 fn baseline_slice_artifact_spec(
     config: &KimiArtifactConfig,
 ) -> KimiBaselineSliceParityArtifactSpec {
@@ -627,6 +1050,33 @@ fn baseline_slice_artifact_spec(
         hidden_size: config.hidden_size,
         vocab_size: config.vocab_size,
     }
+}
+
+fn required_tensor_names(plan: &crate::kimi::import::KimiImportPlan) -> Vec<String> {
+    plan.coverage
+        .mapped_tensors
+        .iter()
+        .map(|mapping| mapping.tensor_name.clone())
+        .collect()
+}
+
+fn compare_baseline_slice_parity_fixture_with_understanding<B: Backend>(
+    artifact_dir: &Path,
+    understanding: &KimiArtifactUnderstanding,
+    fixture: &KimiBaselineSliceParityFixture,
+    device: &B::Device,
+) -> Result<(), KimiBaselineSliceParityError> {
+    fixture.try_validate_static()?;
+    fixture.try_validate_against_understanding(understanding)?;
+
+    B::seed(device, fixture.seed);
+    let model: KimiLinearModel<B> = understanding.try_init_baseline_model_from_dir(
+        artifact_dir,
+        fixture.slice.import_selection.clone(),
+        device,
+    )?;
+
+    compare_model_to_fixture(&model, fixture, device)
 }
 
 fn compare_model_to_fixture<B: Backend>(

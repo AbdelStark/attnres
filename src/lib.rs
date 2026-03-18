@@ -16,10 +16,11 @@
 //! local RFC 0005 slice: baseline-only Gate 1 fixture-backed parity for a
 //! deterministic tiny-random Kimi-style bundle, baseline-only local shard
 //! payload loading for the supported tensor subset, baseline-only Gate 2
-//! external slice-fixture consumption for locally loadable sharded artifacts,
-//! Gate 4 functional validation, reduced-config Gate 5 numerical agreement
-//! tests, and reduced local benchmark scaffolding. Public-checkpoint fixture
-//! generation/parity and Hugging Face/Python dependent gates remain deferred.
+//! external-generator request manifests plus external slice-fixture
+//! consumption for locally loadable sharded artifacts, Gate 4 functional
+//! validation, reduced-config Gate 5 numerical agreement tests, and reduced
+//! local benchmark scaffolding. Public-checkpoint fixture generation/parity
+//! and Hugging Face/Python dependent gates remain deferred.
 //!
 //! ## Quick Start
 //!

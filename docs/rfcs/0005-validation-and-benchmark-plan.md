@@ -26,14 +26,16 @@ The repository now executes a narrow local subset of this RFC:
   changes plus explicit failures for unsupported tensors, missing shard files,
   unsupported dtypes, shape mismatches, and incomplete selected-layer payload
   coverage.
-- Gate 2 now also has an executable baseline-only public-checkpoint parity
-  handoff slice: `src/kimi/slice_parity.rs` defines a machine-readable external
-  `baseline-slice-parity.json` format for the supported baseline subset, and
-  `tests/kimi_rfc_0005_gate2_slice_parity_tests.rs` validates that the repo can
-  consume such fixtures, require exact selected-layer/module/tensor alignment
-  with the local `KimiLinearModel` shard plan, seed still-unloaded local
-  parameters deterministically, and compare logits plus selected post-layer
-  hidden states with explicit tolerances.
+- Gate 2 now also has an executable baseline-only external-generator handoff
+  slice: `src/kimi/slice_parity.rs` defines a machine-readable
+  `baseline-slice-request.json` manifest for the supported `KimiLinearModel`
+  subset, derives it from `KimiArtifactUnderstanding` plus caller-provided
+  slice/prompt inputs, and `tests/kimi_rfc_0005_gate2_slice_parity_tests.rs`
+  validates that the repo can reject stale or invalid request manifests,
+  consume externally generated `baseline-slice-parity.json` fixtures, require
+  exact manifest-to-fixture metadata agreement when requested, seed
+  still-unloaded local parameters deterministically, and compare logits plus
+  selected post-layer hidden states with explicit tolerances.
 - Gate 4 is executable in-repo through AttnRes-Kimi tests for dual AttnRes
   placement, mixed MLA/KDA block-state progression, embedding-block retention,
   and loud invariant-panics on corrupted internal state.
@@ -116,6 +118,8 @@ Executable repo sub-slice:
 
 - baseline-only local shard loading for selected supported tensors into
   `KimiLinearModel`
+- baseline-only external-generator request manifests for that same supported
+  subset via `baseline-slice-request.json`
 - baseline-only external slice-fixture consumption for that same supported
   tensor subset via `baseline-slice-parity.json`
 - local negative-path validation for missing shards, unsupported tensors,
@@ -142,6 +146,8 @@ Still deferred in this checkout:
 
 - external generation of `baseline-slice-parity.json` fixtures from Hugging
   Face / Python / public checkpoints
+- execution of Hugging Face / Python / public-checkpoint generators inside
+  this repository
 - Hugging Face / Python reference execution inside this repository
 - public-checkpoint payloads
 - any public-checkpoint parity claim until an external reference actually

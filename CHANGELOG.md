@@ -25,6 +25,13 @@ The repository did not maintain a structured changelog before March 16, 2026.
   negative tests for fixture kind/version drift, selected-layer mismatches,
   prompt/token mismatches, tolerance metadata drift, and unsupported
   module-request drift.
+- Baseline-only Gate 2 external-generator handoff manifests via
+  `attnres::kimi::KimiBaselineSliceRequestManifest`,
+  `KimiArtifactUnderstanding::try_build_baseline_slice_request_manifest`, and
+  `compare_baseline_slice_parity_fixture_with_manifest_from_dir`, plus
+  negative tests for manifest kind/version drift, invalid selected-hidden-layer
+  requests, prompt/tolerance drift against emitted manifests, and stale
+  module/tensor manifest metadata.
 
 ### Changed
 
@@ -39,6 +46,10 @@ The repository did not maintain a structured changelog before March 16, 2026.
 - Kimi milestone docs now also describe the new external baseline slice-fixture
   consumption path as fixture consumption only, keeping Hugging Face execution,
   fixture generation, and any public-checkpoint parity claim deferred.
+- Kimi milestone docs now describe the new baseline-only external-generator
+  handoff manifest slice as manifest emission plus external fixture
+  consumption, without implying in-repo Hugging Face execution or any
+  public-checkpoint parity claim.
 
 ### Fixed
 

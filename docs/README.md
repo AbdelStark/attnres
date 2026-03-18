@@ -12,7 +12,9 @@ supported tensor subset, plus RFC 0004 AttnRes-Kimi execution scaffolding with
 a separate model/layer/state path. RFC 0005 is now partially executable
 in-repo: baseline-only local Gate 1 parity for a deterministic tiny-random
 Kimi-style fixture, baseline-only local Gate 2 payload-loading prep with real
-sharded payload bytes, Gate 4 functional validation, reduced-config Gate 5
+sharded payload bytes, baseline-only Gate 2 external-generator request
+manifests plus externally generated fixture consumption for the same supported
+`KimiLinearModel` subset, Gate 4 functional validation, reduced-config Gate 5
 numerical agreement, and reduced local benchmark scaffolding. Python/Hugging
 Face baseline parity, public-checkpoint parity, AttnRes-Kimi payload loading,
 and other external validation still remain deferred.

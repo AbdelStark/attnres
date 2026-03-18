@@ -108,11 +108,13 @@ Missing:
   shard-loading slice.
 - Python/Hugging Face or public-checkpoint baseline parity. The repo now has a
   local fixture-backed tiny-random Gate 1 subset plus local Gate 2
-  payload-loading preparation only.
+  payload-loading preparation, external-generator request-manifest emission,
+  and external fixture consumption only.
 - Full public-checkpoint compatibility or parity claims for baseline Kimi or
   AttnRes-Kimi.
 - Public/Hugging Face-dependent RFC 0005 gates beyond the local Gate 1 fixture
-  harness, local Gate 2 payload-loading prep, and reduced local Gate 4/5/7
+  harness, local Gate 2 payload-loading prep, local Gate 2
+  request-manifest/fixture handoff slice, and reduced local Gate 4/5/7
   harnesses now in this repo.
 - Stable 1.0 API guarantees.
 

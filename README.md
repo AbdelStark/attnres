@@ -75,17 +75,28 @@ Known limitations:
   explicit failures for unsupported tensors, missing shards, unsupported
   dtypes, shape mismatches, and incomplete selected-layer payload coverage.
 - RFC 0005 now also has an executable baseline-only Gate 2 fixture-consumption
-  slice for public-checkpoint parity handoff: `attnres::kimi::KimiBaselineSliceParityFixture`
-  plus `attnres::kimi::compare_baseline_slice_parity_fixture_from_dir` consume
-  an externally generated `baseline-slice-parity.json`, validate that its
-  selected layers/modules/tensors match the locally supported shard plan for
-  `KimiLinearModel`, seed the remaining locally initialized parameters
-  deterministically, load the supported local sharded slice, and compare logits
-  plus selected post-layer hidden states with explicit max-abs-diff
-  tolerances.
-- That Gate 2 fixture-consumption slice does not generate reference fixtures in
-  this repository. Producing those fixtures from Hugging Face/Python/public
-  checkpoints remains external and deferred.
+  slice for external-generator handoff:
+  `attnres::kimi::KimiBaselineSliceRequestManifest` plus
+  `KimiArtifactUnderstanding::try_build_baseline_slice_request_manifest`
+  emit a machine-readable `baseline-slice-request.json` for `KimiLinearModel`
+  only. That request manifest captures the artifact/config fingerprint,
+  deterministic local-init seed requirement, import selection, selected hidden
+  layers, exact selected modules, exact required tensor names, prompt suite,
+  and explicit tolerance metadata that an external baseline reference must use
+  to generate a matching fixture.
+- RFC 0005 also keeps the baseline-only fixture-consumption path:
+  `attnres::kimi::KimiBaselineSliceParityFixture`,
+  `compare_baseline_slice_parity_fixture_from_dir`, and
+  `compare_baseline_slice_parity_fixture_with_manifest_from_dir` consume an
+  externally generated `baseline-slice-parity.json`, optionally require exact
+  agreement with an emitted `baseline-slice-request.json`, seed the remaining
+  locally initialized parameters deterministically, load the supported local
+  sharded slice into `KimiLinearModel`, and compare logits plus selected
+  post-layer hidden states with explicit max-abs-diff tolerances.
+- That Gate 2 handoff slice still does not generate reference fixtures in this
+  repository. Producing those fixtures from Hugging Face/Python/public
+  checkpoints remains external and deferred, and no public-checkpoint parity
+  claim exists until an external reference actually returns matching fixtures.
 - Python/Hugging Face baseline parity work, public-checkpoint validation,
   AttnRes-Kimi payload loading, optimized KDA kernels, training stability
   validation, and any benchmark conclusions beyond the reduced local harnesses
@@ -205,11 +216,12 @@ support" claim.
 - Phase E: validation and benchmark scaffolding. Partially implemented in this
   checkout for local deterministic fixtures and reduced configs only: baseline
   Gate 1 fixture-backed parity, local Gate 2 payload-loading prep for the
-  supported baseline subset, baseline-only Gate 2 external fixture consumption
-  for locally loadable sharded slices, Gate 4 functional tests, reduced Gate 5
-  numerical agreement checks, and reduced local benchmark groups. Public
-  checkpoint fixture generation/parity, Python/Hugging Face reference work,
-  training validation, and reportable benchmark claims remain deferred.
+  supported baseline subset, baseline-only Gate 2 external-generator request
+  manifests plus external fixture consumption for locally loadable sharded
+  slices, Gate 4 functional tests, reduced Gate 5 numerical agreement checks,
+  and reduced local benchmark groups. Public checkpoint fixture
+  generation/parity, Python/Hugging Face reference work, training validation,
+  and reportable benchmark claims remain deferred.
 
 See [docs/rfcs/0001-real-model-milestone-scope.md](docs/rfcs/0001-real-model-milestone-scope.md)
 for the accepted sequencing and scope boundaries.
