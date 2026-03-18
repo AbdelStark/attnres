@@ -3,6 +3,7 @@ use burn::prelude::*;
 use burn::tensor::activation::silu;
 
 use crate::kimi::config::KimiDenseMlpRuntimeConfig;
+use crate::kimi::payload::{load_param_tensor, KimiBaselinePayloadError, KimiDecodedTensor};
 
 #[derive(Debug)]
 pub(crate) struct KimiMlpExpert<B: Backend> {
@@ -25,6 +26,27 @@ impl<B: Backend> KimiMlpExpert<B> {
         let up = self.up_proj.forward(x);
         self.down_proj.forward(gate * up)
     }
+
+    pub(crate) fn try_apply_tensor_payload(
+        &mut self,
+        tensor_name: &str,
+        leaf: &str,
+        payload: &KimiDecodedTensor,
+    ) -> Result<(), KimiBaselinePayloadError> {
+        match leaf {
+            "gate_proj.weight" => {
+                load_param_tensor(&mut self.gate_proj.weight, tensor_name, payload)
+            }
+            "up_proj.weight" => load_param_tensor(&mut self.up_proj.weight, tensor_name, payload),
+            "down_proj.weight" => {
+                load_param_tensor(&mut self.down_proj.weight, tensor_name, payload)
+            }
+            _ => Err(KimiBaselinePayloadError::UnsupportedTensorApplication {
+                tensor_name: tensor_name.to_string(),
+                detail: format!("unsupported MLP tensor leaf '{leaf}'"),
+            }),
+        }
+    }
 }
 
 /// Dense SiLU-gated MLP used on dense Kimi layers.
@@ -43,6 +65,16 @@ impl KimiDenseMlpRuntimeConfig {
 }
 
 impl<B: Backend> KimiDenseMlp<B> {
+    pub(crate) fn try_apply_tensor_payload(
+        &mut self,
+        tensor_name: &str,
+        leaf: &str,
+        payload: &KimiDecodedTensor,
+    ) -> Result<(), KimiBaselinePayloadError> {
+        self.inner
+            .try_apply_tensor_payload(tensor_name, leaf, payload)
+    }
+
     pub fn forward(&self, x: Tensor<B, 3>) -> Tensor<B, 3> {
         self.inner.forward(x)
     }

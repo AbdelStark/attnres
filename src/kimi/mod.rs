@@ -7,17 +7,19 @@
 //!   layers, dense-vs-MoE placement, and separate decode-cache families.
 //! - RFC 0003 sharded checkpoint-import scaffolding: tensor locators, explicit
 //!   tensor-to-module coverage reports, dtype policy, selected-layer shard
-//!   planning, and shard-path resolution without fake tensor payload loading.
+//!   planning, and shard-path resolution.
 //! - RFC 0004 AttnRes-Kimi execution scaffolding with a separate model/layer
 //!   path that preserves baseline Kimi sublayer selection while inserting two
 //!   AttnRes operations per decoder layer.
 //! - RFC 0005 local validation/benchmark scaffolding: baseline-only Gate 1
 //!   fixture-backed parity for a deterministic tiny-random Kimi-style bundle,
-//!   Gate 4 functional tests, reduced-config Gate 5 hidden/logit agreement,
-//!   and reduced local benchmark groups for baseline Kimi plus AttnRes-Kimi.
+//!   baseline-only local sharded-payload loading for the supported tensor
+//!   subset, Gate 4 functional tests, reduced-config Gate 5 hidden/logit
+//!   agreement, and reduced local benchmark groups for baseline Kimi plus
+//!   AttnRes-Kimi.
 //!
-//! Public-checkpoint tensor parity, full payload loading, optimized kernels,
-//! and public Hugging Face/Python parity work remain deferred.
+//! Public-checkpoint tensor parity, AttnRes-Kimi payload loading, optimized
+//! kernels, and public Hugging Face/Python parity work remain deferred.
 
 pub mod attention;
 pub mod attn_res_layer;
@@ -31,6 +33,7 @@ pub mod layer;
 pub mod mlp;
 pub mod model;
 pub mod moe;
+pub mod payload;
 pub mod phase;
 pub mod schedule;
 
@@ -60,6 +63,7 @@ pub use layer::KimiDecoderLayer;
 pub use mlp::KimiDenseMlp;
 pub use model::KimiLinearModel;
 pub use moe::KimiSparseMoe;
+pub use payload::KimiBaselinePayloadError;
 pub use phase::{KimiMilestonePhase, KIMI_ARTIFACT_UNDERSTANDING_PHASE, KIMI_IMPLEMENTED_PHASE};
 pub use schedule::{
     KimiAttentionLayerKind, KimiFeedForwardLayerKind, KimiLayerSchedule, KimiLayerScheduleError,

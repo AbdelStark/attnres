@@ -14,10 +14,11 @@
 //! 0004 AttnRes-Kimi execution scaffolding via a separate
 //! `kimi::KimiAttnResModel` path. This checkout now also includes an executable
 //! local RFC 0005 slice: baseline-only Gate 1 fixture-backed parity for a
-//! deterministic tiny-random Kimi-style bundle, Gate 4 functional validation,
-//! reduced-config Gate 5 numerical agreement tests, and reduced local
-//! benchmark scaffolding. Public-checkpoint parity and Hugging Face/Python
-//! dependent gates remain deferred.
+//! deterministic tiny-random Kimi-style bundle, baseline-only local shard
+//! payload loading for the supported tensor subset, Gate 4 functional
+//! validation, reduced-config Gate 5 numerical agreement tests, and reduced
+//! local benchmark scaffolding. Public-checkpoint parity and Hugging
+//! Face/Python dependent gates remain deferred.
 //!
 //! ## Quick Start
 //!

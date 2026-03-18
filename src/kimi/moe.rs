@@ -5,6 +5,7 @@ use burn::tensor::IndexingUpdateOp;
 
 use crate::kimi::config::KimiSparseMoeRuntimeConfig;
 use crate::kimi::mlp::KimiMlpExpert;
+use crate::kimi::payload::{load_param_tensor, KimiBaselinePayloadError, KimiDecodedTensor};
 
 /// Sparse MoE scaffold for RFC 0002.
 ///
@@ -42,6 +43,73 @@ impl KimiSparseMoeRuntimeConfig {
 }
 
 impl<B: Backend> KimiSparseMoe<B> {
+    pub(crate) fn try_apply_tensor_payload(
+        &mut self,
+        tensor_name: &str,
+        remainder: &str,
+        payload: &KimiDecodedTensor,
+    ) -> Result<(), KimiBaselinePayloadError> {
+        match remainder {
+            "gate.weight" => load_param_tensor(&mut self.router.weight, tensor_name, payload),
+            "shared_experts.gate_proj.weight" => {
+                let Some(expert) = self.shared_experts.get_mut(0) else {
+                    return Err(KimiBaselinePayloadError::UnsupportedTensorApplication {
+                        tensor_name: tensor_name.to_string(),
+                        detail: "shared expert payload loading expects exactly one shared expert"
+                            .to_string(),
+                    });
+                };
+                expert.try_apply_tensor_payload(tensor_name, "gate_proj.weight", payload)
+            }
+            "shared_experts.up_proj.weight" => {
+                let Some(expert) = self.shared_experts.get_mut(0) else {
+                    return Err(KimiBaselinePayloadError::UnsupportedTensorApplication {
+                        tensor_name: tensor_name.to_string(),
+                        detail: "shared expert payload loading expects exactly one shared expert"
+                            .to_string(),
+                    });
+                };
+                expert.try_apply_tensor_payload(tensor_name, "up_proj.weight", payload)
+            }
+            "shared_experts.down_proj.weight" => {
+                let Some(expert) = self.shared_experts.get_mut(0) else {
+                    return Err(KimiBaselinePayloadError::UnsupportedTensorApplication {
+                        tensor_name: tensor_name.to_string(),
+                        detail: "shared expert payload loading expects exactly one shared expert"
+                            .to_string(),
+                    });
+                };
+                expert.try_apply_tensor_payload(tensor_name, "down_proj.weight", payload)
+            }
+            _ => {
+                let Some((expert_idx, leaf)) = parse_sparse_expert_leaf(remainder) else {
+                    return Err(KimiBaselinePayloadError::UnsupportedTensorApplication {
+                        tensor_name: tensor_name.to_string(),
+                        detail: format!("unsupported sparse MoE tensor leaf '{remainder}'"),
+                    });
+                };
+                let Some(expert) = self.experts.get_mut(expert_idx) else {
+                    return Err(KimiBaselinePayloadError::UnsupportedTensorApplication {
+                        tensor_name: tensor_name.to_string(),
+                        detail: format!("expert index {expert_idx} is out of range"),
+                    });
+                };
+                let mapped_leaf = match leaf {
+                    "w1.weight" => "gate_proj.weight",
+                    "w2.weight" => "down_proj.weight",
+                    "w3.weight" => "up_proj.weight",
+                    other => {
+                        return Err(KimiBaselinePayloadError::UnsupportedTensorApplication {
+                            tensor_name: tensor_name.to_string(),
+                            detail: format!("unsupported sparse expert tensor leaf '{other}'"),
+                        });
+                    }
+                };
+                expert.try_apply_tensor_payload(tensor_name, mapped_leaf, payload)
+            }
+        }
+    }
+
     pub fn forward(&self, x: Tensor<B, 3>) -> Tensor<B, 3> {
         let [batch, seq_len, _hidden_size] = x.dims();
         let device = x.device();
@@ -89,4 +157,11 @@ impl<B: Backend> KimiSparseMoe<B> {
 
         output
     }
+}
+
+fn parse_sparse_expert_leaf(remainder: &str) -> Option<(usize, &str)> {
+    let prefix = "experts.";
+    let suffix = remainder.strip_prefix(prefix)?;
+    let (expert_idx, leaf) = suffix.split_once('.')?;
+    Some((expert_idx.parse().ok()?, leaf))
 }

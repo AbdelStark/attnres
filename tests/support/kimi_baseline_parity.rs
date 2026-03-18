@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use attnres::kimi::{
     KimiArtifactConfig, KimiArtifactUnderstanding, KimiAttentionLayerKind, KimiImportCoverageError,
     KimiImportError, KimiImportSelection, KimiKdaCache, KimiLinearModel, KimiMlaCache,

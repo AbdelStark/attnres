@@ -104,10 +104,15 @@ completed blocks
   - Parses shard-index metadata, resolves tensor-name to shard paths, and emits
     explicit tensor-to-module coverage reports plus selected-layer/full shard
     plans.
-  - Runs a local baseline-only Gate 1 fixture-backed parity harness plus Gate
-    4/5 checks and reduced local benchmark groups, but still does not provide
-    full tensor payload loading/parity for public Kimi checkpoints,
-    Python/Hugging Face reference parity, or reportable benchmark conclusions.
+  - Keeps the baseline payload-loading path separate from both
+    `KimiAttnResModel` and the reference `AttnResTransformer` by loading only
+    into `KimiLinearModel`, via a local sharded-`safetensors` baseline-only
+    path for the supported tensor subset.
+  - Runs a local baseline-only Gate 1 fixture-backed parity harness, a local
+    Gate 2 payload-loading harness for supported baseline tensors, Gate 4/5
+    checks, and reduced local benchmark groups, but still does not provide
+    public-checkpoint parity, AttnRes-Kimi payload loading, Python/Hugging Face
+    reference parity, or reportable benchmark conclusions.
 
 ## Invariants
 

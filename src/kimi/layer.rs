@@ -5,6 +5,7 @@ use crate::kimi::cache::{KimiCacheError, KimiDecodeCache};
 use crate::kimi::config::{KimiArtifactConfig, KimiArtifactConfigError, KimiBaselineConfig};
 use crate::kimi::mlp::KimiDenseMlp;
 use crate::kimi::moe::KimiSparseMoe;
+use crate::kimi::payload::{load_param_tensor, KimiBaselinePayloadError, KimiDecodedTensor};
 use crate::kimi::schedule::{KimiAttentionLayerKind, KimiFeedForwardLayerKind};
 use crate::rms_norm::{RmsNorm, RmsNormConfig};
 
@@ -116,6 +117,71 @@ impl KimiBaselineConfig {
 }
 
 impl<B: Backend> KimiDecoderLayer<B> {
+    pub(crate) fn try_apply_tensor_payload(
+        &mut self,
+        tensor_name: &str,
+        remainder: &str,
+        payload: &KimiDecodedTensor,
+    ) -> Result<(), KimiBaselinePayloadError> {
+        match remainder {
+            "input_layernorm.weight" => {
+                load_param_tensor(self.input_norm.gamma_param_mut(), tensor_name, payload)
+            }
+            "post_attention_layernorm.weight" => load_param_tensor(
+                self.post_attention_norm.gamma_param_mut(),
+                tensor_name,
+                payload,
+            ),
+            _ => {
+                if let Some(leaf) = remainder.strip_prefix("self_attn.") {
+                    return match &mut self.attention {
+                        KimiAttentionBlock::Mla(attention) => {
+                            attention.try_apply_tensor_payload(tensor_name, leaf, payload)
+                        }
+                        KimiAttentionBlock::Kda(attention) => {
+                            attention.try_apply_tensor_payload(tensor_name, leaf, payload)
+                        }
+                    };
+                }
+
+                if let Some(leaf) = remainder.strip_prefix("mlp.") {
+                    return match &mut self.feed_forward {
+                        KimiFeedForwardBlock::Dense(mlp) => {
+                            mlp.try_apply_tensor_payload(tensor_name, leaf, payload)
+                        }
+                        KimiFeedForwardBlock::SparseMoe(_) => {
+                            Err(KimiBaselinePayloadError::UnsupportedTensorApplication {
+                                tensor_name: tensor_name.to_string(),
+                                detail: "dense MLP tensor cannot be applied to sparse MoE layer"
+                                    .to_string(),
+                            })
+                        }
+                    };
+                }
+
+                if let Some(leaf) = remainder.strip_prefix("block_sparse_moe.") {
+                    return match &mut self.feed_forward {
+                        KimiFeedForwardBlock::Dense(_) => {
+                            Err(KimiBaselinePayloadError::UnsupportedTensorApplication {
+                                tensor_name: tensor_name.to_string(),
+                                detail: "sparse MoE tensor cannot be applied to dense MLP layer"
+                                    .to_string(),
+                            })
+                        }
+                        KimiFeedForwardBlock::SparseMoe(moe) => {
+                            moe.try_apply_tensor_payload(tensor_name, leaf, payload)
+                        }
+                    };
+                }
+
+                Err(KimiBaselinePayloadError::UnsupportedTensorApplication {
+                    tensor_name: tensor_name.to_string(),
+                    detail: format!("unsupported decoder-layer tensor leaf '{remainder}'"),
+                })
+            }
+        }
+    }
+
     pub fn layer_idx(&self) -> usize {
         self.layer_idx
     }

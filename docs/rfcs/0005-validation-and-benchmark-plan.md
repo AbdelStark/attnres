@@ -19,6 +19,13 @@ The repository now executes a narrow local subset of this RFC:
   validates selected-layer baseline coverage through RFC 0003 planning, then
   checks deterministic `KimiLinearModel` logits, selected post-layer hidden
   states, and cache traces on a fixed prompt suite.
+- Gate 2 now has an executable local preparation slice for the baseline path
+  only: `tests/kimi_rfc_0005_gate2_local_payload_tests.rs` writes a tiny local
+  sharded `safetensors` artifact with real payload bytes, loads the supported
+  tensor subset into `KimiLinearModel`, and checks deterministic forward-output
+  changes plus explicit failures for unsupported tensors, missing shard files,
+  unsupported dtypes, shape mismatches, and incomplete selected-layer payload
+  coverage.
 - Gate 4 is executable in-repo through AttnRes-Kimi tests for dual AttnRes
   placement, mixed MLA/KDA block-state progression, embedding-block retention,
   and loud invariant-panics on corrupted internal state.
@@ -32,7 +39,8 @@ The repository now executes a narrow local subset of this RFC:
 The following remain deferred and should not be implied by local results:
 
 - Python/Hugging Face execution against `tiny-random/kimi-linear` for Gate 1.
-- Gate 2 selected-layer public-checkpoint parity.
+- Gate 2 selected-layer public-checkpoint parity against a real public
+  checkpoint.
 - Gate 3 end-to-end public-checkpoint smoke.
 - Gate 6 training-stability validation.
 - Any benchmark claim beyond the reduced local harnesses above.
@@ -96,6 +104,14 @@ Pass condition:
 
 ### Gate 2: Public Kimi layer-slice parity
 
+Executable repo sub-slice:
+
+- baseline-only local shard loading for selected supported tensors into
+  `KimiLinearModel`
+- local negative-path validation for missing shards, unsupported tensors,
+  unsupported dtypes, tensor-shape mismatches, and incomplete selected-module
+  payloads
+
 Target:
 
 - `moonshotai/Kimi-Linear-48B-A3B-Instruct`
@@ -109,6 +125,13 @@ Requirements:
 Pass condition:
 
 - targeted hidden-state parity within agreed tolerances
+
+Still deferred in this checkout:
+
+- Hugging Face / Python reference execution
+- public-checkpoint payloads
+- parity tolerances against a public checkpoint rather than a local synthetic
+  shard bundle
 
 ### Gate 3: End-to-end baseline smoke
 

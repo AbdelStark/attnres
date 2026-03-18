@@ -4,6 +4,7 @@ use burn::tensor::activation::softplus;
 
 use crate::kimi::cache::KimiKdaCache;
 use crate::kimi::config::KimiAttentionRuntimeConfig;
+use crate::kimi::payload::{load_param_tensor, KimiBaselinePayloadError, KimiDecodedTensor};
 
 /// Local KDA scaffold for RFC 0002.
 ///
@@ -55,6 +56,24 @@ impl KimiAttentionRuntimeConfig {
 }
 
 impl<B: Backend> KimiKdaAttention<B> {
+    pub(crate) fn try_apply_tensor_payload(
+        &mut self,
+        tensor_name: &str,
+        leaf: &str,
+        payload: &KimiDecodedTensor,
+    ) -> Result<(), KimiBaselinePayloadError> {
+        match leaf {
+            "q_proj.weight" => load_param_tensor(&mut self.q_proj.weight, tensor_name, payload),
+            "k_proj.weight" => load_param_tensor(&mut self.k_proj.weight, tensor_name, payload),
+            "v_proj.weight" => load_param_tensor(&mut self.v_proj.weight, tensor_name, payload),
+            "o_proj.weight" => load_param_tensor(&mut self.out_proj.weight, tensor_name, payload),
+            _ => Err(KimiBaselinePayloadError::UnsupportedTensorApplication {
+                tensor_name: tensor_name.to_string(),
+                detail: format!("unsupported KDA tensor leaf '{leaf}'"),
+            }),
+        }
+    }
+
     pub fn forward(
         &self,
         hidden: Tensor<B, 3>,

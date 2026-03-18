@@ -104,14 +104,16 @@ Missing:
 
 - Formal algorithm/spec document in-repo.
 - PyTorch checkpoint loading.
-- Kimi tensor payload loading/parity beyond the RFC 0003 shard-planning and
-  coverage-report scaffolding.
+- Kimi tensor payload loading/parity beyond the baseline-only local supported
+  shard-loading slice.
 - Python/Hugging Face or public-checkpoint baseline parity. The repo now has a
-  local fixture-backed tiny-random Gate 1 subset only.
+  local fixture-backed tiny-random Gate 1 subset plus local Gate 2
+  payload-loading preparation only.
 - Full public-checkpoint compatibility or parity claims for baseline Kimi or
   AttnRes-Kimi.
 - Public/Hugging Face-dependent RFC 0005 gates beyond the local Gate 1 fixture
-  harness and reduced local Gate 4/5/7 harnesses now in this repo.
+  harness, local Gate 2 payload-loading prep, and reduced local Gate 4/5/7
+  harnesses now in this repo.
 - Stable 1.0 API guarantees.
 
 Fragile:

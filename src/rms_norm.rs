@@ -39,6 +39,10 @@ pub struct RmsNorm<B: Backend> {
 }
 
 impl<B: Backend> RmsNorm<B> {
+    pub(crate) fn gamma_param_mut(&mut self) -> &mut Param<Tensor<B, 1>> {
+        &mut self.gamma
+    }
+
     /// Forward pass for 3D input [B, T, D].
     pub fn forward(&self, x: Tensor<B, 3>) -> Tensor<B, 3> {
         // variance: mean(x^2) over last dim -> [B, T, 1]

@@ -14,6 +14,11 @@ The repository did not maintain a structured changelog before March 16, 2026.
 - `ARCHITECTURE.md` and `CONTRIBUTING.md`.
 - `attnres::kimi` Phase A scaffolding for RFC 0001: typed Kimi artifact config,
   typed layer schedules, shard-index metadata, and import planning/report APIs.
+- Baseline-only local sharded-`safetensors` payload loading for the supported
+  Kimi tensor subset via `KimiLinearModel::try_from_artifact_dir` and
+  `KimiArtifactUnderstanding::try_init_baseline_model_from_dir`, plus explicit
+  negative tests for missing shards, unsupported tensors/dtypes, shape
+  mismatches, and incomplete selected-layer payload coverage.
 
 ### Changed
 
@@ -22,6 +27,9 @@ The repository did not maintain a structured changelog before March 16, 2026.
   and verified commands instead of stale or aspirational claims.
 - Top-level docs now state that Kimi work is staged and that only Phase A
   artifact understanding is implemented in this checkout.
+- Kimi milestone docs now describe the new local baseline-only payload-loading
+  slice in executable repo terms and keep public-checkpoint/Hugging Face claims
+  deferred.
 
 ### Fixed
 

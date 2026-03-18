@@ -1,9 +1,11 @@
+use burn::module::Param;
 use burn::nn::{Linear, LinearConfig};
 use burn::prelude::*;
 use burn::tensor::activation::softmax;
 
 use crate::kimi::cache::KimiMlaCache;
 use crate::kimi::config::KimiAttentionRuntimeConfig;
+use crate::kimi::payload::{load_param_tensor, KimiBaselinePayloadError, KimiDecodedTensor};
 
 #[derive(Debug)]
 enum KimiQueryProjection<B: Backend> {
@@ -16,6 +18,13 @@ impl<B: Backend> KimiQueryProjection<B> {
         match self {
             Self::Direct(linear) => linear.forward(x),
             Self::LowRank { down, up } => up.forward(down.forward(x)),
+        }
+    }
+
+    fn direct_weight_mut(&mut self) -> Option<&mut Param<Tensor<B, 2>>> {
+        match self {
+            Self::Direct(linear) => Some(&mut linear.weight),
+            Self::LowRank { .. } => None,
         }
     }
 }
@@ -81,6 +90,30 @@ impl KimiAttentionRuntimeConfig {
 }
 
 impl<B: Backend> KimiMlaAttention<B> {
+    pub(crate) fn try_apply_tensor_payload(
+        &mut self,
+        tensor_name: &str,
+        leaf: &str,
+        payload: &KimiDecodedTensor,
+    ) -> Result<(), KimiBaselinePayloadError> {
+        match leaf {
+            "q_proj.weight" => {
+                let Some(weight) = self.q_proj.direct_weight_mut() else {
+                    return Err(KimiBaselinePayloadError::UnsupportedTensorApplication {
+                        tensor_name: tensor_name.to_string(),
+                        detail: "low-rank MLA query payload loading remains deferred".to_string(),
+                    });
+                };
+                load_param_tensor(weight, tensor_name, payload)
+            }
+            "o_proj.weight" => load_param_tensor(&mut self.out_proj.weight, tensor_name, payload),
+            _ => Err(KimiBaselinePayloadError::UnsupportedTensorApplication {
+                tensor_name: tensor_name.to_string(),
+                detail: format!("unsupported MLA tensor leaf '{leaf}'"),
+            }),
+        }
+    }
+
     pub fn forward(
         &self,
         hidden: Tensor<B, 3>,
