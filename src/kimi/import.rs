@@ -877,6 +877,25 @@ fn planned_tensors_for_module(
                         vec![format!("layers[{layer_idx}].attention.q_proj.weight")],
                     ),
                     planned_tensor(
+                        format!("model.layers.{layer_idx}.self_attn.kv_a_proj_with_mqa.weight"),
+                        module,
+                        vec![format!(
+                            "layers[{layer_idx}].attention.kv_a_proj_with_mqa.weight"
+                        )],
+                    ),
+                    planned_tensor(
+                        format!("model.layers.{layer_idx}.self_attn.kv_a_layernorm.weight"),
+                        module,
+                        vec![format!(
+                            "layers[{layer_idx}].attention.kv_a_layernorm.weight"
+                        )],
+                    ),
+                    planned_tensor(
+                        format!("model.layers.{layer_idx}.self_attn.kv_b_proj.weight"),
+                        module,
+                        vec![format!("layers[{layer_idx}].attention.kv_b_proj.weight")],
+                    ),
+                    planned_tensor(
                         format!("model.layers.{layer_idx}.self_attn.o_proj.weight"),
                         module,
                         vec![format!("layers[{layer_idx}].attention.out_proj.weight")],
@@ -897,6 +916,61 @@ fn planned_tensors_for_module(
                         format!("model.layers.{layer_idx}.self_attn.v_proj.weight"),
                         module,
                         vec![format!("layers[{layer_idx}].attention.v_proj.weight")],
+                    ),
+                    planned_tensor(
+                        format!("model.layers.{layer_idx}.self_attn.q_conv1d.weight"),
+                        module,
+                        vec![format!("layers[{layer_idx}].attention.q_conv1d.weight")],
+                    ),
+                    planned_tensor(
+                        format!("model.layers.{layer_idx}.self_attn.k_conv1d.weight"),
+                        module,
+                        vec![format!("layers[{layer_idx}].attention.k_conv1d.weight")],
+                    ),
+                    planned_tensor(
+                        format!("model.layers.{layer_idx}.self_attn.v_conv1d.weight"),
+                        module,
+                        vec![format!("layers[{layer_idx}].attention.v_conv1d.weight")],
+                    ),
+                    planned_tensor(
+                        format!("model.layers.{layer_idx}.self_attn.A_log"),
+                        module,
+                        vec![format!("layers[{layer_idx}].attention.a_log")],
+                    ),
+                    planned_tensor(
+                        format!("model.layers.{layer_idx}.self_attn.f_a_proj.weight"),
+                        module,
+                        vec![format!("layers[{layer_idx}].attention.f_a_proj.weight")],
+                    ),
+                    planned_tensor(
+                        format!("model.layers.{layer_idx}.self_attn.f_b_proj.weight"),
+                        module,
+                        vec![format!("layers[{layer_idx}].attention.f_b_proj.weight")],
+                    ),
+                    planned_tensor(
+                        format!("model.layers.{layer_idx}.self_attn.dt_bias"),
+                        module,
+                        vec![format!("layers[{layer_idx}].attention.dt_bias")],
+                    ),
+                    planned_tensor(
+                        format!("model.layers.{layer_idx}.self_attn.b_proj.weight"),
+                        module,
+                        vec![format!("layers[{layer_idx}].attention.b_proj.weight")],
+                    ),
+                    planned_tensor(
+                        format!("model.layers.{layer_idx}.self_attn.g_a_proj.weight"),
+                        module,
+                        vec![format!("layers[{layer_idx}].attention.g_a_proj.weight")],
+                    ),
+                    planned_tensor(
+                        format!("model.layers.{layer_idx}.self_attn.g_b_proj.weight"),
+                        module,
+                        vec![format!("layers[{layer_idx}].attention.g_b_proj.weight")],
+                    ),
+                    planned_tensor(
+                        format!("model.layers.{layer_idx}.self_attn.o_norm.weight"),
+                        module,
+                        vec![format!("layers[{layer_idx}].attention.o_norm.weight")],
                     ),
                     planned_tensor(
                         format!("model.layers.{layer_idx}.self_attn.o_proj.weight"),
@@ -940,6 +1014,15 @@ fn planned_tensors_for_module(
                         module,
                         vec![format!("layers[{layer_idx}].feed_forward.router.weight")],
                     )];
+                    planned.push(planned_tensor(
+                        format!(
+                            "model.layers.{layer_idx}.block_sparse_moe.gate.e_score_correction_bias"
+                        ),
+                        module,
+                        vec![format!(
+                            "layers[{layer_idx}].feed_forward.router.e_score_correction_bias"
+                        )],
+                    ));
 
                     if config.num_shared_experts == 1 {
                         planned.extend([
@@ -1151,11 +1234,6 @@ fn attention_tensor_mapping(
 ) -> Option<KimiTensorMapping> {
     let status = match kind {
         KimiAttentionLayerKind::FullAttention => match leaf {
-            "kv_a_proj_with_mqa.weight" => {
-                KimiUnsupportedTensorReason::MlaKvLatentProjectionContainsUnsupportedRopeRows
-            }
-            "kv_a_layernorm.weight" => KimiUnsupportedTensorReason::MlaKvLayerNormUnsupported,
-            "kv_b_proj.weight" => KimiUnsupportedTensorReason::MlaKvUpProjectionUnsupported,
             "q_a_proj.weight" | "q_a_layernorm.weight" | "q_b_proj.weight"
                 if config.q_lora_rank.is_some() =>
             {
@@ -1211,9 +1289,7 @@ fn feed_forward_tensor_mapping(
             }
         }
         KimiFeedForwardLayerKind::SparseMoe => {
-            if remainder == "block_sparse_moe.gate.e_score_correction_bias" {
-                KimiUnsupportedTensorReason::MoeRouterBiasCorrectionUnsupported
-            } else if remainder.starts_with("mlp.") {
+            if remainder.starts_with("mlp.") {
                 KimiUnsupportedTensorReason::TensorDoesNotMatchFeedForwardKind { expected: kind }
             } else if remainder.starts_with("block_sparse_moe.shared_experts.")
                 && config.num_shared_experts != 1

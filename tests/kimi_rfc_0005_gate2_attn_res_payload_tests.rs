@@ -101,7 +101,7 @@ fn kimi_rfc_0005_gate2_loaded_attn_res_model_keeps_cached_decode_available() {
 fn kimi_rfc_0005_gate2_attn_res_rejects_unsupported_selected_tensor_before_loading_payloads() {
     let mut builder = TinyBaselinePayloadArtifactBuilder::new();
     builder.insert_weight_map_tensor(
-        "model.layers.1.self_attn.kv_a_proj_with_mqa.weight",
+        "model.layers.1.self_attn.q_a_proj.weight",
         "model-00002-of-00002.safetensors",
     );
     let selection = builder.full_selection();
@@ -122,7 +122,7 @@ fn kimi_rfc_0005_gate2_attn_res_rejects_unsupported_selected_tensor_before_loadi
         KimiBaselinePayloadError::Coverage(KimiImportCoverageError::UnsupportedTensor {
             tensor_name,
             ..
-        }) if tensor_name == "model.layers.1.self_attn.kv_a_proj_with_mqa.weight"
+        }) if tensor_name == "model.layers.1.self_attn.q_a_proj.weight"
     ));
 }
 

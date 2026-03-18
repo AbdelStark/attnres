@@ -1,3 +1,4 @@
+use burn::module::Module;
 use burn::prelude::*;
 
 use crate::attn_res_op::AttnResOp;
@@ -11,10 +12,10 @@ use crate::kimi::payload::{load_param_tensor, KimiBaselinePayloadError, KimiDeco
 use crate::kimi::schedule::{KimiAttentionLayerKind, KimiFeedForwardLayerKind};
 use crate::rms_norm::{RmsNorm, RmsNormConfig};
 
-#[derive(Debug)]
+#[derive(Module, Debug)]
 enum KimiAttnResAttentionBlock<B: Backend> {
-    Mla(Box<KimiMlaAttention<B>>),
-    Kda(Box<KimiKdaAttention<B>>),
+    Mla(KimiMlaAttention<B>),
+    Kda(KimiKdaAttention<B>),
 }
 
 impl<B: Backend> KimiAttnResAttentionBlock<B> {
@@ -31,10 +32,10 @@ impl<B: Backend> KimiAttnResAttentionBlock<B> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Module, Debug)]
 enum KimiAttnResFeedForwardBlock<B: Backend> {
-    Dense(Box<KimiDenseMlp<B>>),
-    SparseMoe(Box<KimiSparseMoe<B>>),
+    Dense(KimiDenseMlp<B>),
+    SparseMoe(KimiSparseMoe<B>),
 }
 
 impl<B: Backend> KimiAttnResFeedForwardBlock<B> {
@@ -59,7 +60,7 @@ impl<B: Backend> KimiAttnResFeedForwardBlock<B> {
 }
 
 /// One RFC 0004 AttnRes-Kimi decoder layer.
-#[derive(Debug)]
+#[derive(Module, Debug)]
 pub struct KimiAttnResDecoderLayer<B: Backend> {
     layer_idx: usize,
     block_size: usize,
@@ -112,19 +113,19 @@ impl KimiAttnResConfig {
 
         let attention = match layer.attention_kind {
             KimiAttentionLayerKind::FullAttention => {
-                KimiAttnResAttentionBlock::Mla(Box::new(self.baseline.attention.init_mla(device)))
+                KimiAttnResAttentionBlock::Mla(self.baseline.attention.init_mla(device))
             }
             KimiAttentionLayerKind::LinearAttentionKda => {
-                KimiAttnResAttentionBlock::Kda(Box::new(self.baseline.attention.init_kda(device)))
+                KimiAttnResAttentionBlock::Kda(self.baseline.attention.init_kda(device))
             }
         };
         let feed_forward = match layer.feed_forward_kind {
             KimiFeedForwardLayerKind::DenseMlp => {
-                KimiAttnResFeedForwardBlock::Dense(Box::new(self.baseline.dense_mlp.init(device)))
+                KimiAttnResFeedForwardBlock::Dense(self.baseline.dense_mlp.init(device))
             }
-            KimiFeedForwardLayerKind::SparseMoe => KimiAttnResFeedForwardBlock::SparseMoe(
-                Box::new(self.baseline.sparse_moe.init(device)),
-            ),
+            KimiFeedForwardLayerKind::SparseMoe => {
+                KimiAttnResFeedForwardBlock::SparseMoe(self.baseline.sparse_moe.init(device))
+            }
         };
 
         Ok(KimiAttnResDecoderLayer {

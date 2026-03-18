@@ -288,6 +288,65 @@ fn kimi_rfc_0005_gate2_slice_manifest_rejects_hidden_layers_outside_import_selec
 }
 
 #[test]
+fn kimi_rfc_0005_gate2_slice_manifest_rejects_hidden_layer_prefix_gaps() {
+    let builder = TinyBaselinePayloadArtifactBuilder::new();
+    let selection = builder.full_selection();
+    let artifact = builder.write();
+    let mut manifest = build_valid_manifest(artifact.path(), selection.clone(), &[1]);
+    manifest.slice.import_selection.layer_indices = vec![1];
+    let manifest = write_manifest(&manifest);
+    let fixture = write_valid_fixture(artifact.path(), selection, &[1]);
+    let device = Default::default();
+
+    let err = compare_baseline_slice_parity_fixture_with_manifest_from_dir::<TestBackend, _, _, _>(
+        artifact.path(),
+        manifest.path(),
+        fixture.path(),
+        &device,
+    )
+    .unwrap_err();
+
+    assert!(matches!(
+        err,
+        KimiBaselineSliceParityError::ExecutedPrefixLayerNotInImportSelection {
+            layer_idx,
+            required_through_layer,
+            ref import_selection_layers,
+        } if layer_idx == 0 && required_through_layer == 1 && import_selection_layers == &vec![1]
+    ));
+}
+
+#[test]
+fn kimi_rfc_0005_gate2_slice_manifest_rejects_compare_logits_without_full_layer_prefix() {
+    let builder = TinyBaselinePayloadArtifactBuilder::new();
+    let selection = builder.full_selection();
+    let artifact = builder.write();
+    let mut manifest = build_valid_manifest(artifact.path(), selection.clone(), &[0]);
+    manifest.slice.import_selection.layer_indices = vec![0];
+    manifest.slice.selected_hidden_layers.clear();
+    let manifest = write_manifest(&manifest);
+    let fixture = write_valid_fixture(artifact.path(), selection, &[0]);
+    let device = Default::default();
+
+    let err = compare_baseline_slice_parity_fixture_with_manifest_from_dir::<TestBackend, _, _, _>(
+        artifact.path(),
+        manifest.path(),
+        fixture.path(),
+        &device,
+    )
+    .unwrap_err();
+
+    assert!(matches!(
+        err,
+        KimiBaselineSliceParityError::ExecutedPrefixLayerNotInImportSelection {
+            layer_idx,
+            required_through_layer,
+            ref import_selection_layers,
+        } if layer_idx == 1 && required_through_layer == 1 && import_selection_layers == &vec![0]
+    ));
+}
+
+#[test]
 fn kimi_rfc_0005_gate2_slice_manifest_rejects_hidden_only_mode_without_hidden_layers() {
     let builder = TinyBaselinePayloadArtifactBuilder::single_layer_dense_kda();
     let artifact = builder.write();

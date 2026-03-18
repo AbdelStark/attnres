@@ -7,6 +7,30 @@ use crate::kimi::schedule::{
     KimiAttentionLayerKind, KimiFeedForwardLayerKind, KimiLayerSchedule, KimiLayerScheduleError,
 };
 
+fn default_moe_renormalize() -> bool {
+    true
+}
+
+fn default_moe_router_activation_func() -> String {
+    "sigmoid".to_string()
+}
+
+fn default_routed_scaling_factor() -> f64 {
+    1.0
+}
+
+fn default_use_grouped_topk() -> bool {
+    true
+}
+
+fn default_num_expert_group() -> usize {
+    1
+}
+
+fn default_topk_group() -> usize {
+    1
+}
+
 /// Typed subset of `linear_attn_config` from the public Kimi artifact config.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KimiLinearAttentionConfig {
@@ -42,6 +66,18 @@ pub struct KimiArtifactConfig {
     pub num_experts: usize,
     pub num_experts_per_token: usize,
     pub num_shared_experts: usize,
+    #[serde(default = "default_moe_renormalize")]
+    pub moe_renormalize: bool,
+    #[serde(default = "default_moe_router_activation_func")]
+    pub moe_router_activation_func: String,
+    #[serde(default = "default_routed_scaling_factor")]
+    pub routed_scaling_factor: f64,
+    #[serde(default = "default_use_grouped_topk")]
+    pub use_grouped_topk: bool,
+    #[serde(default = "default_num_expert_group")]
+    pub num_expert_group: usize,
+    #[serde(default = "default_topk_group")]
+    pub topk_group: usize,
     pub tie_word_embeddings: bool,
     pub use_cache: bool,
     pub rms_norm_eps: f64,
@@ -49,7 +85,7 @@ pub struct KimiArtifactConfig {
 }
 
 /// Runtime view of the Kimi attention parameter surface used by the local baseline.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KimiAttentionRuntimeConfig {
     pub hidden_size: usize,
     pub num_attention_heads: usize,
@@ -61,6 +97,7 @@ pub struct KimiAttentionRuntimeConfig {
     pub qk_rope_head_dim: usize,
     pub v_head_dim: usize,
     pub mla_use_nope: bool,
+    pub rms_norm_eps: f64,
     pub linear_attention_num_heads: usize,
     pub linear_attention_head_dim: usize,
     pub linear_attention_short_conv_kernel_size: usize,
@@ -82,7 +119,7 @@ impl KimiAttentionRuntimeConfig {
 }
 
 /// Dense SiLU MLP runtime parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KimiDenseMlpRuntimeConfig {
     pub hidden_size: usize,
     pub intermediate_size: usize,
@@ -90,13 +127,19 @@ pub struct KimiDenseMlpRuntimeConfig {
 }
 
 /// Sparse MoE runtime parameters.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KimiSparseMoeRuntimeConfig {
     pub hidden_size: usize,
     pub intermediate_size: usize,
     pub num_experts: usize,
     pub num_experts_per_token: usize,
     pub num_shared_experts: usize,
+    pub moe_renormalize: bool,
+    pub moe_router_activation_func: String,
+    pub routed_scaling_factor: f64,
+    pub use_grouped_topk: bool,
+    pub num_expert_group: usize,
+    pub topk_group: usize,
     pub hidden_act: String,
 }
 
@@ -261,6 +304,9 @@ pub enum KimiArtifactConfigError {
     HiddenActUnsupported {
         hidden_act: String,
     },
+    MoeRouterActivationUnsupported {
+        moe_router_activation_func: String,
+    },
     TiedWordEmbeddingsUnsupported,
     NumExpertsMustBePositive,
     NumExpertsPerTokenMustBePositive,
@@ -271,6 +317,19 @@ pub enum KimiArtifactConfigError {
     NumSharedExpertsExceedsNumExperts {
         num_shared_experts: usize,
         num_experts: usize,
+    },
+    RoutedScalingFactorMustBePositive {
+        routed_scaling_factor: f64,
+    },
+    NumExpertGroupMustBePositive,
+    NumExpertsMustBeDivisibleByNumExpertGroup {
+        num_experts: usize,
+        num_expert_group: usize,
+    },
+    TopkGroupMustBePositive,
+    TopkGroupExceedsNumExpertGroup {
+        topk_group: usize,
+        num_expert_group: usize,
     },
     RmsNormEpsMustBePositive {
         rms_norm_eps: f64,
@@ -338,6 +397,12 @@ impl Display for KimiArtifactConfigError {
             Self::HiddenActUnsupported { hidden_act } => {
                 write!(f, "hidden_act must be \"silu\" for Kimi Linear, got \"{hidden_act}\"")
             }
+            Self::MoeRouterActivationUnsupported {
+                moe_router_activation_func,
+            } => write!(
+                f,
+                "moe_router_activation_func must be \"sigmoid\" or \"softmax\", got \"{moe_router_activation_func}\""
+            ),
             Self::TiedWordEmbeddingsUnsupported => {
                 write!(f, "tie_word_embeddings = true is out of scope for Kimi Linear RFC 0002")
             }
@@ -358,6 +423,32 @@ impl Display for KimiArtifactConfigError {
             } => write!(
                 f,
                 "num_shared_experts ({num_shared_experts}) must be <= num_experts ({num_experts})"
+            ),
+            Self::RoutedScalingFactorMustBePositive {
+                routed_scaling_factor,
+            } => write!(
+                f,
+                "routed_scaling_factor must be positive, got {routed_scaling_factor}"
+            ),
+            Self::NumExpertGroupMustBePositive => {
+                write!(f, "num_expert_group must be positive, got 0")
+            }
+            Self::NumExpertsMustBeDivisibleByNumExpertGroup {
+                num_experts,
+                num_expert_group,
+            } => write!(
+                f,
+                "num_experts ({num_experts}) must be divisible by num_expert_group ({num_expert_group})"
+            ),
+            Self::TopkGroupMustBePositive => {
+                write!(f, "topk_group must be positive, got 0")
+            }
+            Self::TopkGroupExceedsNumExpertGroup {
+                topk_group,
+                num_expert_group,
+            } => write!(
+                f,
+                "topk_group ({topk_group}) must be <= num_expert_group ({num_expert_group})"
             ),
             Self::RmsNormEpsMustBePositive { rms_norm_eps } => {
                 write!(f, "rms_norm_eps must be positive, got {rms_norm_eps}")
@@ -514,6 +605,11 @@ impl KimiArtifactConfig {
                 hidden_act: self.hidden_act.clone(),
             });
         }
+        if !matches!(self.moe_router_activation_func.as_str(), "sigmoid" | "softmax") {
+            return Err(KimiArtifactConfigError::MoeRouterActivationUnsupported {
+                moe_router_activation_func: self.moe_router_activation_func.clone(),
+            });
+        }
         if self.tie_word_embeddings {
             return Err(KimiArtifactConfigError::TiedWordEmbeddingsUnsupported);
         }
@@ -535,6 +631,31 @@ impl KimiArtifactConfig {
             return Err(KimiArtifactConfigError::NumSharedExpertsExceedsNumExperts {
                 num_shared_experts: self.num_shared_experts,
                 num_experts: self.num_experts,
+            });
+        }
+        if !self.routed_scaling_factor.is_finite() || self.routed_scaling_factor <= 0.0 {
+            return Err(KimiArtifactConfigError::RoutedScalingFactorMustBePositive {
+                routed_scaling_factor: self.routed_scaling_factor,
+            });
+        }
+        if self.num_expert_group == 0 {
+            return Err(KimiArtifactConfigError::NumExpertGroupMustBePositive);
+        }
+        if !self.num_experts.is_multiple_of(self.num_expert_group) {
+            return Err(
+                KimiArtifactConfigError::NumExpertsMustBeDivisibleByNumExpertGroup {
+                    num_experts: self.num_experts,
+                    num_expert_group: self.num_expert_group,
+                },
+            );
+        }
+        if self.topk_group == 0 {
+            return Err(KimiArtifactConfigError::TopkGroupMustBePositive);
+        }
+        if self.topk_group > self.num_expert_group {
+            return Err(KimiArtifactConfigError::TopkGroupExceedsNumExpertGroup {
+                topk_group: self.topk_group,
+                num_expert_group: self.num_expert_group,
             });
         }
         if self.rms_norm_eps <= 0.0 {
@@ -599,6 +720,7 @@ impl KimiArtifactConfig {
                 qk_rope_head_dim: self.qk_rope_head_dim,
                 v_head_dim: self.v_head_dim,
                 mla_use_nope: self.mla_use_nope,
+                rms_norm_eps: self.rms_norm_eps,
                 linear_attention_num_heads: self.linear_attn_config.num_heads,
                 linear_attention_head_dim: self.linear_attn_config.head_dim,
                 linear_attention_short_conv_kernel_size: self
@@ -616,6 +738,12 @@ impl KimiArtifactConfig {
                 num_experts: self.num_experts,
                 num_experts_per_token: self.num_experts_per_token,
                 num_shared_experts: self.num_shared_experts,
+                moe_renormalize: self.moe_renormalize,
+                moe_router_activation_func: self.moe_router_activation_func.clone(),
+                routed_scaling_factor: self.routed_scaling_factor,
+                use_grouped_topk: self.use_grouped_topk,
+                num_expert_group: self.num_expert_group,
+                topk_group: self.topk_group,
                 hidden_act: self.hidden_act.clone(),
             },
         })

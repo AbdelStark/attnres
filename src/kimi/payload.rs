@@ -11,6 +11,7 @@ use crate::kimi::import::{
     KimiImportCoverageError, KimiImportError, KimiImportPlan, KimiModuleRef, KimiShardResolver,
     KimiShardResolverError,
 };
+use crate::kimi::index::{KimiTensorLocator, KimiTensorLocatorError};
 
 /// Typed failures for local Kimi tensor payload loading from sharded artifacts.
 #[derive(Debug, Clone, PartialEq)]
@@ -162,7 +163,7 @@ pub(crate) fn load_selected_tensor_payloads(
     root_dir: &Path,
     artifact_dtype: &str,
 ) -> Result<BTreeMap<String, KimiDecodedTensor>, KimiBaselinePayloadError> {
-    let expected_dtype = expected_safetensors_dtype(artifact_dtype)?;
+    let allowed_dtypes = allowed_safetensors_dtypes(artifact_dtype)?;
     let resolver = KimiShardResolver::new(root_dir);
     let resolved_shards = resolver.try_resolve_plan(plan)?;
     let tensors_by_shard = plan_mapped_tensors_by_shard(plan);
@@ -176,12 +177,47 @@ pub(crate) fn load_selected_tensor_payloads(
             &shard.resolved_path,
             requested,
             artifact_dtype,
-            expected_dtype,
+            allowed_dtypes,
             &mut loaded,
         )?;
     }
 
     ensure_complete_module_payloads(plan, &loaded)?;
+    Ok(loaded)
+}
+
+pub(crate) fn load_named_tensor_payloads(
+    locator: &KimiTensorLocator,
+    tensor_names: &[String],
+    root_dir: &Path,
+    artifact_dtype: &str,
+) -> Result<BTreeMap<String, KimiDecodedTensor>, KimiBaselinePayloadError> {
+    let allowed_dtypes = allowed_safetensors_dtypes(artifact_dtype)?;
+    let mut tensors_by_shard = BTreeMap::<String, Vec<String>>::new();
+    for tensor_name in tensor_names {
+        let shard_path = locator
+            .shard_for_tensor(tensor_name)
+            .ok_or_else(|| KimiTensorLocatorError::MissingTensor {
+                tensor_name: tensor_name.clone(),
+            })
+            .map_err(KimiImportError::TensorLocator)?;
+        tensors_by_shard
+            .entry(shard_path.to_string())
+            .or_default()
+            .push(tensor_name.clone());
+    }
+
+    let mut loaded = BTreeMap::new();
+    for (shard_path, requested) in tensors_by_shard {
+        load_shard_payloads(
+            &root_dir.join(&shard_path),
+            &requested,
+            artifact_dtype,
+            allowed_dtypes,
+            &mut loaded,
+        )?;
+    }
+
     Ok(loaded)
 }
 
@@ -191,30 +227,44 @@ pub(crate) fn load_param_tensor<const D: usize, B: Backend>(
     payload: &KimiDecodedTensor,
 ) -> Result<(), KimiBaselinePayloadError> {
     let expected = target.lazy_shape().dims;
-    if payload.shape != expected {
+    let values = if payload.shape == expected {
+        payload.values.clone()
+    } else if D == 2 && payload.shape == vec![expected[1], expected[0]] {
+        transpose_2d_values(&payload.values, payload.shape[0], payload.shape[1])
+    } else {
         return Err(KimiBaselinePayloadError::TensorShapeMismatch {
             tensor_name: tensor_name.to_string(),
             expected,
             actual: payload.shape.clone(),
         });
-    }
+    };
 
     let param_id = target.id;
     let device = target.lazy_device();
     let tensor = Tensor::<B, D>::from_data(
-        TensorData::new(payload.values.clone(), payload.shape.clone()),
+        TensorData::new(values, expected.clone()),
         &device,
     );
     *target = target.clone().transform_for_load(tensor, param_id);
     Ok(())
 }
 
-fn expected_safetensors_dtype(
+fn transpose_2d_values(values: &[f32], rows: usize, cols: usize) -> Vec<f32> {
+    let mut transposed = vec![0.0; values.len()];
+    for row in 0..rows {
+        for col in 0..cols {
+            transposed[col * rows + row] = values[row * cols + col];
+        }
+    }
+    transposed
+}
+
+fn allowed_safetensors_dtypes(
     artifact_dtype: &str,
-) -> Result<&'static str, KimiBaselinePayloadError> {
+) -> Result<&'static [&'static str], KimiBaselinePayloadError> {
     match artifact_dtype {
-        "float32" => Ok("F32"),
-        "bfloat16" => Ok("BF16"),
+        "float32" => Ok(&["F32"]),
+        "bfloat16" => Ok(&["BF16", "F32"]),
         other => Err(KimiImportError::UnsupportedArtifactDtype {
             dtype: other.to_string(),
         }
@@ -239,7 +289,7 @@ fn load_shard_payloads(
     path: &Path,
     requested: &[String],
     artifact_dtype: &str,
-    expected_dtype: &str,
+    allowed_dtypes: &[&str],
     loaded: &mut BTreeMap<String, KimiDecodedTensor>,
 ) -> Result<(), KimiBaselinePayloadError> {
     let bytes = std::fs::read(path).map_err(|err| KimiBaselinePayloadError::ReadFailed {
@@ -259,7 +309,7 @@ fn load_shard_payloads(
             tensor,
             data,
             artifact_dtype,
-            expected_dtype,
+            allowed_dtypes,
         )?;
         loaded.insert(tensor_name.clone(), decoded);
     }
@@ -321,7 +371,7 @@ fn decode_tensor_payload(
     tensor: &SafetensorTensorHeader,
     data: &[u8],
     artifact_dtype: &str,
-    expected_dtype: &str,
+    allowed_dtypes: &[&str],
 ) -> Result<KimiDecodedTensor, KimiBaselinePayloadError> {
     let dtype = tensor.dtype.as_str();
     let element_size = match dtype {
@@ -335,10 +385,10 @@ fn decode_tensor_payload(
         }
     };
 
-    if dtype != expected_dtype {
+    if !allowed_dtypes.contains(&dtype) {
         return Err(KimiBaselinePayloadError::TensorDtypeMismatch {
             tensor_name: tensor_name.to_string(),
-            expected: artifact_dtype.to_string(),
+            expected: allowed_tensor_dtype_label(artifact_dtype),
             actual: render_tensor_dtype(dtype),
         });
     }
@@ -446,5 +496,81 @@ fn render_tensor_dtype(dtype: &str) -> String {
         "F32" => "float32".to_string(),
         "BF16" => "bfloat16".to_string(),
         other => other.to_string(),
+    }
+}
+
+fn allowed_tensor_dtype_label(artifact_dtype: &str) -> String {
+    match artifact_dtype {
+        "float32" => "float32".to_string(),
+        "bfloat16" => "bfloat16 or float32 auxiliary tensors".to_string(),
+        other => other.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    fn dummy_tensor_header(dtype: &str, shape: Vec<usize>) -> SafetensorTensorHeader {
+        let element_size = match dtype {
+            "F32" => 4,
+            "BF16" => 2,
+            other => panic!("unsupported test dtype {other}"),
+        };
+        let byte_len = shape.iter().product::<usize>() * element_size;
+        SafetensorTensorHeader {
+            dtype: dtype.to_string(),
+            shape,
+            data_offsets: [0, byte_len],
+        }
+    }
+
+    #[test]
+    fn bfloat16_artifact_accepts_float32_auxiliary_tensors() {
+        let header = dummy_tensor_header("F32", vec![2]);
+        let raw = [
+            0.0f32.to_le_bytes().as_slice(),
+            1.5f32.to_le_bytes().as_slice(),
+        ]
+        .concat();
+        let decoded = decode_tensor_payload(
+            &PathBuf::from("dummy.safetensors"),
+            "model.layers.0.self_attn.A_log",
+            &header,
+            &raw,
+            "bfloat16",
+            &["BF16", "F32"],
+        )
+        .unwrap();
+
+        assert_eq!(decoded.shape, vec![2]);
+        assert_eq!(decoded.values, vec![0.0, 1.5]);
+    }
+
+    #[test]
+    fn bfloat16_artifact_rejects_unsupported_float16_tensor_payloads() {
+        let header = SafetensorTensorHeader {
+            dtype: "F16".to_string(),
+            shape: vec![2],
+            data_offsets: [0, 4],
+        };
+        let err = decode_tensor_payload(
+            &PathBuf::from("dummy.safetensors"),
+            "model.layers.0.self_attn.q_proj.weight",
+            &header,
+            &[0, 0, 0, 0],
+            "bfloat16",
+            &["BF16", "F32"],
+        )
+        .unwrap_err();
+
+        assert_eq!(
+            err,
+            KimiBaselinePayloadError::UnsupportedTensorDtype {
+                tensor_name: "model.layers.0.self_attn.q_proj.weight".to_string(),
+                dtype: "F16".to_string(),
+            }
+        );
     }
 }

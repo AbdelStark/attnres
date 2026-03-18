@@ -31,6 +31,12 @@ fn reduced_config_json() -> String {
         "num_experts": 2,
         "num_experts_per_token": 1,
         "num_shared_experts": 1,
+        "moe_renormalize": true,
+        "moe_router_activation_func": "sigmoid",
+        "routed_scaling_factor": 1.0,
+        "use_grouped_topk": true,
+        "num_expert_group": 1,
+        "topk_group": 1,
         "tie_word_embeddings": false,
         "use_cache": true,
         "rms_norm_eps": 1e-5,
@@ -57,6 +63,17 @@ fn supported_slice_index_json() -> String {
             "model.layers.0.self_attn.q_proj.weight": "model-00001-of-00003.safetensors",
             "model.layers.0.self_attn.k_proj.weight": "model-00001-of-00003.safetensors",
             "model.layers.0.self_attn.v_proj.weight": "model-00001-of-00003.safetensors",
+            "model.layers.0.self_attn.q_conv1d.weight": "model-00001-of-00003.safetensors",
+            "model.layers.0.self_attn.k_conv1d.weight": "model-00001-of-00003.safetensors",
+            "model.layers.0.self_attn.v_conv1d.weight": "model-00001-of-00003.safetensors",
+            "model.layers.0.self_attn.A_log": "model-00001-of-00003.safetensors",
+            "model.layers.0.self_attn.f_a_proj.weight": "model-00001-of-00003.safetensors",
+            "model.layers.0.self_attn.f_b_proj.weight": "model-00001-of-00003.safetensors",
+            "model.layers.0.self_attn.dt_bias": "model-00001-of-00003.safetensors",
+            "model.layers.0.self_attn.b_proj.weight": "model-00002-of-00003.safetensors",
+            "model.layers.0.self_attn.g_a_proj.weight": "model-00002-of-00003.safetensors",
+            "model.layers.0.self_attn.g_b_proj.weight": "model-00002-of-00003.safetensors",
+            "model.layers.0.self_attn.o_norm.weight": "model-00002-of-00003.safetensors",
             "model.layers.0.self_attn.o_proj.weight": "model-00002-of-00003.safetensors",
             "model.layers.0.post_attention_layernorm.weight": "model-00002-of-00003.safetensors",
             "model.layers.0.mlp.gate_proj.weight": "model-00002-of-00003.safetensors",
@@ -81,8 +98,18 @@ fn rich_index_json() -> String {
             "model.layers.0.self_attn.q_proj.weight": "model-00001-of-00004.safetensors",
             "model.layers.0.self_attn.k_proj.weight": "model-00001-of-00004.safetensors",
             "model.layers.0.self_attn.v_proj.weight": "model-00001-of-00004.safetensors",
-            "model.layers.0.self_attn.o_proj.weight": "model-00001-of-00004.safetensors",
             "model.layers.0.self_attn.q_conv1d.weight": "model-00001-of-00004.safetensors",
+            "model.layers.0.self_attn.k_conv1d.weight": "model-00001-of-00004.safetensors",
+            "model.layers.0.self_attn.v_conv1d.weight": "model-00001-of-00004.safetensors",
+            "model.layers.0.self_attn.A_log": "model-00001-of-00004.safetensors",
+            "model.layers.0.self_attn.f_a_proj.weight": "model-00001-of-00004.safetensors",
+            "model.layers.0.self_attn.f_b_proj.weight": "model-00001-of-00004.safetensors",
+            "model.layers.0.self_attn.dt_bias": "model-00001-of-00004.safetensors",
+            "model.layers.0.self_attn.b_proj.weight": "model-00001-of-00004.safetensors",
+            "model.layers.0.self_attn.g_a_proj.weight": "model-00001-of-00004.safetensors",
+            "model.layers.0.self_attn.g_b_proj.weight": "model-00001-of-00004.safetensors",
+            "model.layers.0.self_attn.o_norm.weight": "model-00001-of-00004.safetensors",
+            "model.layers.0.self_attn.o_proj.weight": "model-00001-of-00004.safetensors",
             "model.layers.0.post_attention_layernorm.weight": "model-00001-of-00004.safetensors",
             "model.layers.0.mlp.gate_proj.weight": "model-00002-of-00004.safetensors",
             "model.layers.0.mlp.up_proj.weight": "model-00002-of-00004.safetensors",
@@ -94,6 +121,7 @@ fn rich_index_json() -> String {
             "model.layers.1.self_attn.kv_a_proj_with_mqa.weight": "model-00002-of-00004.safetensors",
             "model.layers.1.self_attn.kv_b_proj.weight": "model-00002-of-00004.safetensors",
             "model.layers.1.self_attn.o_proj.weight": "model-00002-of-00004.safetensors",
+            "model.layers.1.self_attn.q_a_proj.weight": "model-00002-of-00004.safetensors",
             "model.layers.1.post_attention_layernorm.weight": "model-00002-of-00004.safetensors",
             "model.layers.1.mlp.gate_proj.weight": "model-00002-of-00004.safetensors",
             "model.layers.1.mlp.up_proj.weight": "model-00002-of-00004.safetensors",
@@ -103,8 +131,18 @@ fn rich_index_json() -> String {
             "model.layers.2.self_attn.q_proj.weight": "model-00003-of-00004.safetensors",
             "model.layers.2.self_attn.k_proj.weight": "model-00003-of-00004.safetensors",
             "model.layers.2.self_attn.v_proj.weight": "model-00003-of-00004.safetensors",
-            "model.layers.2.self_attn.o_proj.weight": "model-00003-of-00004.safetensors",
+            "model.layers.2.self_attn.q_conv1d.weight": "model-00003-of-00004.safetensors",
+            "model.layers.2.self_attn.k_conv1d.weight": "model-00003-of-00004.safetensors",
+            "model.layers.2.self_attn.v_conv1d.weight": "model-00003-of-00004.safetensors",
+            "model.layers.2.self_attn.A_log": "model-00003-of-00004.safetensors",
+            "model.layers.2.self_attn.f_a_proj.weight": "model-00003-of-00004.safetensors",
+            "model.layers.2.self_attn.f_b_proj.weight": "model-00003-of-00004.safetensors",
+            "model.layers.2.self_attn.dt_bias": "model-00003-of-00004.safetensors",
+            "model.layers.2.self_attn.b_proj.weight": "model-00003-of-00004.safetensors",
+            "model.layers.2.self_attn.g_a_proj.weight": "model-00003-of-00004.safetensors",
+            "model.layers.2.self_attn.g_b_proj.weight": "model-00003-of-00004.safetensors",
             "model.layers.2.self_attn.o_norm.weight": "model-00003-of-00004.safetensors",
+            "model.layers.2.self_attn.o_proj.weight": "model-00003-of-00004.safetensors",
             "model.layers.2.post_attention_layernorm.weight": "model-00003-of-00004.safetensors",
             "model.layers.2.block_sparse_moe.gate.weight": "model-00003-of-00004.safetensors",
             "model.layers.2.block_sparse_moe.gate.e_score_correction_bias": "model-00003-of-00004.safetensors",
@@ -117,6 +155,7 @@ fn rich_index_json() -> String {
             "model.layers.2.block_sparse_moe.experts.1.w1.weight": "model-00004-of-00004.safetensors",
             "model.layers.2.block_sparse_moe.experts.1.w2.weight": "model-00004-of-00004.safetensors",
             "model.layers.2.block_sparse_moe.experts.1.w3.weight": "model-00004-of-00004.safetensors",
+            "model.layers.2.block_sparse_moe.experts.2.w1.weight": "model-00004-of-00004.safetensors",
 
             "model.norm.weight": "model-00004-of-00004.safetensors",
             "lm_head.weight": "model-00004-of-00004.safetensors"
@@ -209,15 +248,15 @@ fn kimi_rfc_0003_reports_unsupported_and_missing_tensors_honestly() {
         .coverage
         .unsupported_tensors
         .iter()
-        .any(|tensor| tensor.tensor_name == "model.layers.0.self_attn.q_conv1d.weight"));
+        .any(|tensor| tensor.tensor_name == "model.layers.1.self_attn.q_a_proj.weight"));
     assert!(plan
         .coverage
         .unsupported_tensors
         .iter()
-        .any(|tensor| tensor.tensor_name == "model.layers.1.self_attn.kv_a_proj_with_mqa.weight"));
+        .any(|tensor| tensor.tensor_name == "model.layers.2.block_sparse_moe.experts.2.w1.weight"));
     assert!(plan
         .coverage
-        .unsupported_tensors
+        .mapped_tensors
         .iter()
         .any(|tensor| tensor.tensor_name
             == "model.layers.2.block_sparse_moe.gate.e_score_correction_bias"));
@@ -259,7 +298,7 @@ fn kimi_rfc_0003_module_coverage_tracks_supported_sparse_moe_tensors() {
         .iter()
         .any(|tensor| tensor.ends_with("block_sparse_moe.experts.1.w3.weight")));
     assert!(sparse_module
-        .unsupported_tensors
+        .mapped_tensors
         .iter()
         .any(|tensor| tensor.ends_with("block_sparse_moe.gate.e_score_correction_bias")));
 }

@@ -1,3 +1,4 @@
+use burn::module::Module;
 use burn::nn::{Embedding, EmbeddingConfig, Linear, LinearConfig};
 use burn::prelude::*;
 use std::path::Path;
@@ -13,7 +14,7 @@ use crate::kimi::schedule::KimiLayerSchedule;
 use crate::rms_norm::{RmsNorm, RmsNormConfig};
 
 /// Baseline Kimi Linear model scaffold from RFC 0002.
-#[derive(Debug)]
+#[derive(Module, Debug)]
 pub struct KimiLinearModel<B: Backend> {
     embedding: Embedding<B>,
     layers: Vec<KimiDecoderLayer<B>>,
@@ -53,7 +54,9 @@ impl KimiBaselineConfig {
             final_norm: RmsNormConfig::new(self.hidden_size())
                 .with_eps(self.rms_norm_eps())
                 .init(device),
-            lm_head: LinearConfig::new(self.hidden_size(), self.vocab_size()).init(device),
+            lm_head: LinearConfig::new(self.hidden_size(), self.vocab_size())
+                .with_bias(false)
+                .init(device),
             layer_schedule: self.layer_schedule.clone(),
             use_cache: self.use_cache(),
         })

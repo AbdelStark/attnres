@@ -153,8 +153,9 @@ fn kimi_rfc_0002_cache_types_stay_separate_and_validate_shapes() {
 
     let kda_cache = KimiKdaCache::try_new(
         Tensor::<TestBackend, 4>::zeros([1, 4, 2, 8], &device),
+        Tensor::<TestBackend, 4>::zeros([1, 4, 2, 8], &device),
+        Tensor::<TestBackend, 4>::zeros([1, 4, 2, 8], &device),
         Tensor::<TestBackend, 4>::zeros([1, 4, 8, 8], &device),
-        Tensor::<TestBackend, 3>::zeros([1, 4, 8], &device),
         2,
         2,
         8,
@@ -166,8 +167,9 @@ fn kimi_rfc_0002_cache_types_stay_separate_and_validate_shapes() {
 
     let kda_err = KimiKdaCache::try_new(
         Tensor::<TestBackend, 4>::zeros([1, 4, 3, 8], &device),
+        Tensor::<TestBackend, 4>::zeros([1, 4, 2, 8], &device),
+        Tensor::<TestBackend, 4>::zeros([1, 4, 2, 8], &device),
         Tensor::<TestBackend, 4>::zeros([1, 4, 8, 8], &device),
-        Tensor::<TestBackend, 3>::zeros([1, 4, 8], &device),
         2,
         2,
         8,

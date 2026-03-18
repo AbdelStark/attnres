@@ -117,7 +117,7 @@ fn kimi_rfc_0005_gate1_rejects_unsupported_selected_layer_tensors() {
     let mut index_json: Value =
         serde_json::from_str(&read_fixture_text("model.safetensors.index.json")).unwrap();
     index_json["weight_map"].as_object_mut().unwrap().insert(
-        "model.layers.1.self_attn.kv_a_proj_with_mqa.weight".to_string(),
+        "model.layers.1.self_attn.q_a_proj.weight".to_string(),
         json!("model-00002-of-00002.safetensors"),
     );
 
@@ -134,7 +134,7 @@ fn kimi_rfc_0005_gate1_rejects_unsupported_selected_layer_tensors() {
         }) => {
             assert_eq!(
                 tensor_name,
-                "model.layers.1.self_attn.kv_a_proj_with_mqa.weight"
+                "model.layers.1.self_attn.q_a_proj.weight"
             );
         }
         other => panic!("expected unsupported tensor coverage error, got {other:?}"),

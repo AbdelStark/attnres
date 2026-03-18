@@ -1,3 +1,4 @@
+use burn::module::Module;
 use burn::nn::{Linear, LinearConfig};
 use burn::prelude::*;
 use burn::tensor::activation::silu;
@@ -5,7 +6,7 @@ use burn::tensor::activation::silu;
 use crate::kimi::config::KimiDenseMlpRuntimeConfig;
 use crate::kimi::payload::{load_param_tensor, KimiBaselinePayloadError, KimiDecodedTensor};
 
-#[derive(Debug)]
+#[derive(Module, Debug)]
 pub(crate) struct KimiMlpExpert<B: Backend> {
     gate_proj: Linear<B>,
     up_proj: Linear<B>,
@@ -15,9 +16,15 @@ pub(crate) struct KimiMlpExpert<B: Backend> {
 impl<B: Backend> KimiMlpExpert<B> {
     pub(crate) fn new(hidden_size: usize, intermediate_size: usize, device: &B::Device) -> Self {
         Self {
-            gate_proj: LinearConfig::new(hidden_size, intermediate_size).init(device),
-            up_proj: LinearConfig::new(hidden_size, intermediate_size).init(device),
-            down_proj: LinearConfig::new(intermediate_size, hidden_size).init(device),
+            gate_proj: LinearConfig::new(hidden_size, intermediate_size)
+                .with_bias(false)
+                .init(device),
+            up_proj: LinearConfig::new(hidden_size, intermediate_size)
+                .with_bias(false)
+                .init(device),
+            down_proj: LinearConfig::new(intermediate_size, hidden_size)
+                .with_bias(false)
+                .init(device),
         }
     }
 
@@ -50,7 +57,7 @@ impl<B: Backend> KimiMlpExpert<B> {
 }
 
 /// Dense SiLU-gated MLP used on dense Kimi layers.
-#[derive(Debug)]
+#[derive(Module, Debug)]
 pub struct KimiDenseMlp<B: Backend> {
     inner: KimiMlpExpert<B>,
 }

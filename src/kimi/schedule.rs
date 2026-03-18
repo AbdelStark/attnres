@@ -1,9 +1,10 @@
+use burn::module::Module;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::fmt::{Display, Formatter};
 
 /// Attention path used by a given Kimi decoder layer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Module, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KimiAttentionLayerKind {
     /// Full-attention MLA layer.
     FullAttention,
@@ -12,7 +13,7 @@ pub enum KimiAttentionLayerKind {
 }
 
 /// Feed-forward path used by a given Kimi decoder layer.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Module, Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KimiFeedForwardLayerKind {
     /// Dense MLP layer.
     DenseMlp,
@@ -21,7 +22,7 @@ pub enum KimiFeedForwardLayerKind {
 }
 
 /// Typed schedule entry for one zero-based Kimi decoder layer.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Module, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KimiScheduledLayer {
     pub layer_idx: usize,
     pub attention_kind: KimiAttentionLayerKind,
@@ -29,7 +30,7 @@ pub struct KimiScheduledLayer {
 }
 
 /// Zero-based internal layer schedule derived from the external artifact config.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Module, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct KimiLayerSchedule {
     layers: Vec<KimiScheduledLayer>,
     full_attention_layers_zero_based: Vec<usize>,

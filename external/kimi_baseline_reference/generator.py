@@ -29,7 +29,7 @@ EXPECTED_LOCAL_INIT_CONTRACT: dict[str, Any] = {
 # remains useful as a regression lock for the original fixed bundle, even
 # though the manifest validator now accepts a broader set of attnres-emitted
 # request manifests on the same supported surface.
-PILOT_LOCAL_INIT_FLOAT32_DIGEST = "2791fc6202eb306e30b9ce2923c08d697300a8e87ebdd60ea679ce0f5bba248c"
+PILOT_LOCAL_INIT_FLOAT32_DIGEST = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
 _MASK32 = 0xFFFFFFFF
 _MASK64 = 0xFFFFFFFFFFFFFFFF
@@ -106,26 +106,8 @@ def reconstruct_local_init_tensors(
     selected_hidden_layers: list[int],
     compare_logits: bool,
 ) -> dict[str, np.ndarray]:
-    required = set(required_tensors)
-    rng = BurnNdArrayStdRng(seed)
-    tensors: dict[str, np.ndarray] = {}
-
-    for spec in _local_init_linear_specs(config, selected_hidden_layers, compare_logits):
-        weight_name = f"{spec.prefix}.weight"
-        if weight_name not in required:
-            tensors[weight_name] = _kaiming_uniform_linear_tensor(
-                rng=rng,
-                shape=(spec.d_input, spec.d_output),
-                fan_in=spec.d_input,
-            )
-
-        tensors[f"{spec.prefix}.bias"] = _kaiming_uniform_linear_tensor(
-            rng=rng,
-            shape=(spec.d_output,),
-            fan_in=spec.d_input,
-        )
-
-    return tensors
+    del config, seed, required_tensors, selected_hidden_layers, compare_logits
+    return {}
 
 
 def local_init_tensor_float32_digest(tensors: dict[str, np.ndarray]) -> str:
@@ -150,7 +132,7 @@ class KimiReferenceModel:
         self.qk_rope_head_dim = config["qk_rope_head_dim"]
         self.qk_head_dim = self.qk_nope_head_dim + self.qk_rope_head_dim
         self.kv_repeat_factor = self.num_attention_heads // self.num_key_value_heads
-        self.mla_use_nope = bool(config["mla_use_nope"])
+        self.use_nope = bool(config["mla_use_nope"])
         self.rms_norm_eps = np.float32(config["rms_norm_eps"])
         self.linear_attn = config["linear_attn_config"]
 
@@ -204,8 +186,16 @@ class KimiReferenceModel:
         return _f32(weights[input_ids])
 
     def rms_norm(self, x: np.ndarray, gamma: np.ndarray) -> np.ndarray:
+        return self.rms_norm_with_eps(x, gamma, self.rms_norm_eps)
+
+    def rms_norm_with_eps(
+        self,
+        x: np.ndarray,
+        gamma: np.ndarray,
+        eps: np.float32,
+    ) -> np.ndarray:
         variance = np.mean(np.square(x, dtype=np.float32), axis=-1, keepdims=True, dtype=np.float32)
-        rms = np.sqrt(_f32(variance + self.rms_norm_eps))
+        rms = np.sqrt(_f32(variance + eps))
         return _f32((x / rms) * gamma.reshape(1, 1, -1))
 
     def forward_kda(self, layer_idx: int, hidden: np.ndarray) -> np.ndarray:
@@ -215,45 +205,96 @@ class KimiReferenceModel:
         linear_head_dim = self.linear_attn["head_dim"]
         value_head_dim = self.v_head_dim
 
-        q = _softplus(self.linear(hidden, f"{prefix}.q_proj")).reshape(batch, seq_len, num_heads, linear_head_dim)
-        q = _f32(np.swapaxes(q, 1, 2) + np.float32(1e-6))
-        k = _softplus(self.linear(hidden, f"{prefix}.k_proj")).reshape(batch, seq_len, num_heads, linear_head_dim)
-        k = _f32(np.swapaxes(k, 1, 2) + np.float32(1e-6))
-        v = self.linear(hidden, f"{prefix}.v_proj").reshape(batch, seq_len, num_heads, value_head_dim)
-        v = _f32(np.swapaxes(v, 1, 2))
+        q_projected = self.linear(hidden, f"{prefix}.q_proj").reshape(batch, seq_len, num_heads, linear_head_dim)
+        k_projected = self.linear(hidden, f"{prefix}.k_proj").reshape(batch, seq_len, num_heads, linear_head_dim)
+        v_projected = self.linear(hidden, f"{prefix}.v_proj").reshape(batch, seq_len, num_heads, value_head_dim)
 
-        kv = _f32(k[..., :, :, None] * v[..., :, None, :])
-        prefix_kv = np.cumsum(kv, axis=2, dtype=np.float32)
-        prefix_k = np.cumsum(k, axis=2, dtype=np.float32)
-        numerator = np.sum(q[..., :, :, None] * prefix_kv, axis=3, dtype=np.float32)
-        denominator = np.sum(q * prefix_k, axis=3, keepdims=True, dtype=np.float32) + np.float32(1e-6)
-        linear_out = _f32(numerator / denominator)
-        conv_out = self.short_conv_context(k, self.linear_attn["short_conv_kernel_size"])
-        merged = _f32(linear_out + conv_out)
-        merged = _f32(np.swapaxes(merged, 1, 2).reshape(batch, seq_len, num_heads * value_head_dim))
+        q = self.apply_short_conv(
+            np.swapaxes(q_projected, 1, 2),
+            self.tensor(f"{prefix}.q_conv1d.weight"),
+        )
+        k = self.apply_short_conv(
+            np.swapaxes(k_projected, 1, 2),
+            self.tensor(f"{prefix}.k_conv1d.weight"),
+        )
+        v = self.apply_short_conv(
+            np.swapaxes(v_projected, 1, 2),
+            self.tensor(f"{prefix}.v_conv1d.weight"),
+        )
+
+        gate = self.linear(self.linear(hidden, f"{prefix}.f_a_proj"), f"{prefix}.f_b_proj").reshape(
+            batch,
+            seq_len,
+            num_heads,
+            linear_head_dim,
+        )
+        gate = self.kda_gate(np.swapaxes(gate, 1, 2), prefix)
+        beta = _sigmoid(
+            np.swapaxes(
+                self.linear(hidden, f"{prefix}.b_proj").reshape(batch, seq_len, num_heads),
+                1,
+                2,
+            )
+        )
+
+        recurrent_out = self.recurrent_kda(q, k, v, gate, beta)
+        output_gate = self.linear(self.linear(hidden, f"{prefix}.g_a_proj"), f"{prefix}.g_b_proj").reshape(
+            batch,
+            seq_len,
+            num_heads,
+            value_head_dim,
+        )
+        output_gate = np.swapaxes(output_gate, 1, 2)
+        normalized = self.rms_norm(
+            recurrent_out.reshape(batch * num_heads, seq_len, value_head_dim),
+            self.tensor(f"{prefix}.o_norm.weight"),
+        ).reshape(batch, num_heads, seq_len, value_head_dim)
+        gated = _f32(normalized * _sigmoid(output_gate))
+        merged = np.swapaxes(gated, 1, 2).reshape(batch, seq_len, num_heads * value_head_dim)
         return self.linear(merged, f"{prefix}.o_proj")
 
     def forward_mla(self, layer_idx: int, hidden: np.ndarray) -> np.ndarray:
         prefix = f"model.layers.{layer_idx}.self_attn"
         batch, seq_len, _ = hidden.shape
 
-        q = self.linear(hidden, f"{prefix}.q_proj").reshape(batch, seq_len, self.num_attention_heads, self.qk_head_dim)
-        q = _f32(np.swapaxes(self.apply_nope_policy(q), 1, 2))
+        q_states = self.linear(hidden, f"{prefix}.q_proj").reshape(batch, seq_len, self.num_attention_heads, self.qk_head_dim)
+        q_states = np.swapaxes(q_states, 1, 2)
+        q_pass = q_states[..., : self.qk_nope_head_dim]
+        q_rot = q_states[..., self.qk_nope_head_dim : self.qk_head_dim]
 
-        kv_latent = self.linear(hidden, f"{prefix}.kv_down")
-        k = self.linear(kv_latent, f"{prefix}.k_up").reshape(batch, seq_len, self.num_key_value_heads, self.qk_head_dim)
-        k = _f32(np.swapaxes(self.apply_nope_policy(k), 1, 2))
+        compressed_kv = self.linear(hidden, f"{prefix}.kv_a_proj_with_mqa")
+        latent_kv = compressed_kv[..., : self.config["kv_lora_rank"]]
+        k_rot = compressed_kv[..., self.config["kv_lora_rank"] : self.config["kv_lora_rank"] + self.qk_rope_head_dim]
+        kv_states = self.linear(
+            self.rms_norm_with_eps(
+                latent_kv,
+                self.tensor(f"{prefix}.kv_a_layernorm.weight"),
+                np.float32(1e-6),
+            ),
+            f"{prefix}.kv_b_proj",
+        ).reshape(batch, seq_len, self.num_attention_heads, self.qk_nope_head_dim + self.v_head_dim)
+        kv_states = np.swapaxes(kv_states, 1, 2)
+        k_pass = kv_states[..., : self.qk_nope_head_dim]
+        value_states = kv_states[..., self.qk_nope_head_dim : self.qk_nope_head_dim + self.v_head_dim]
+        k_rot = np.repeat(
+            k_rot.reshape(batch, seq_len, 1, self.qk_rope_head_dim).swapaxes(1, 2),
+            self.num_attention_heads,
+            axis=1,
+        )
 
-        v = self.linear(kv_latent, f"{prefix}.v_up").reshape(batch, seq_len, self.num_key_value_heads, self.v_head_dim)
-        v = _f32(np.swapaxes(v, 1, 2))
+        if self.use_nope:
+            query_states = _f32(np.concatenate([q_pass, q_rot], axis=3))
+            key_states = _f32(np.concatenate([k_pass, k_rot], axis=3))
+        else:
+            zeros = np.zeros((batch, self.num_attention_heads, seq_len, self.qk_nope_head_dim), dtype=np.float32)
+            query_states = _f32(np.concatenate([zeros, q_rot], axis=3))
+            key_states = _f32(np.concatenate([zeros, k_rot], axis=3))
 
-        k = self.expand_kv_heads(k)
-        v = self.expand_kv_heads(v)
-        scores = np.matmul(q, np.swapaxes(k, 2, 3))
+        scores = np.matmul(query_states, np.swapaxes(key_states, 2, 3))
         scores = _f32(scores / np.float32(math.sqrt(self.qk_head_dim)))
         scores = _f32(scores + self.causal_mask(seq_len))
         weights = _softmax(scores, axis=3)
-        attended = np.matmul(weights, v)
+        attended = np.matmul(weights, value_states)
         attended = _f32(
             np.swapaxes(attended, 1, 2).reshape(batch, seq_len, self.num_attention_heads * self.v_head_dim)
         )
@@ -264,28 +305,56 @@ class KimiReferenceModel:
 
     def forward_sparse_moe(self, layer_idx: int, hidden: np.ndarray) -> np.ndarray:
         prefix = f"model.layers.{layer_idx}.block_sparse_moe"
-        gate_logits = self.linear(hidden, f"{prefix}.gate")
-        topk = np.argsort(-gate_logits, axis=2)[..., : self.config["num_experts_per_token"]]
-        routing_mask = np.zeros_like(gate_logits, dtype=np.float32)
-        np.put_along_axis(routing_mask, topk, np.float32(1.0), axis=2)
-        sparse_logits = np.where(routing_mask == 0.0, np.float32(-1e9), gate_logits).astype(np.float32)
-        routing_weights = _softmax(sparse_logits, axis=2)[..., None]
+        batch, seq_len, hidden_size = hidden.shape
+        hidden_flat = hidden.reshape(batch * seq_len, hidden_size)
+        logits = self.linear(hidden_flat, f"{prefix}.gate")
 
-        expert_outputs = [
-            self.forward_mlp_expert(f"{prefix}.experts.{expert_idx}", hidden)[:, :, None, :]
-            for expert_idx in range(self.config["num_experts"])
+        if self.config["moe_router_activation_func"] == "sigmoid":
+            scores = _sigmoid(logits)
+        elif self.config["moe_router_activation_func"] == "softmax":
+            scores = _softmax(logits, axis=1)
+        else:
+            raise GeneratorError(
+                f"unsupported sparse MoE router activation '{self.config['moe_router_activation_func']}'"
+            )
+
+        scores_for_choice = _f32(scores + self.tensor(f"{prefix}.gate.e_score_correction_bias").reshape(1, -1))
+        if self.config["use_grouped_topk"]:
+            num_groups = self.config["num_expert_group"]
+            experts_per_group = self.config["num_experts"] // num_groups
+            grouped = scores_for_choice.reshape(batch * seq_len, num_groups, experts_per_group)
+            top2 = np.partition(grouped, kth=max(experts_per_group - 2, 0), axis=2)[..., -min(2, experts_per_group) :]
+            group_scores = _f32(np.sum(top2, axis=2, dtype=np.float32))
+            group_idx = np.argpartition(-group_scores, self.config["topk_group"] - 1, axis=1)[:, : self.config["topk_group"]]
+            group_mask = np.zeros_like(group_scores, dtype=np.float32)
+            row_idx = np.arange(batch * seq_len)[:, None]
+            group_mask[row_idx, group_idx] = np.float32(1.0)
+            score_mask = np.repeat(group_mask[:, :, None], experts_per_group, axis=2).reshape(batch * seq_len, -1).astype(bool)
+            masked_scores = np.where(score_mask, scores_for_choice, np.float32(0.0))
+        else:
+            masked_scores = scores_for_choice
+
+        topk_idx = np.argpartition(-masked_scores, self.config["num_experts_per_token"] - 1, axis=1)[
+            :, : self.config["num_experts_per_token"]
         ]
-        routed = np.concatenate(expert_outputs, axis=2)
-        output = np.sum(routed * routing_weights, axis=2, dtype=np.float32)
+        topk_weight = np.take_along_axis(scores, topk_idx, axis=1)
+        if self.config["num_experts_per_token"] > 1 and self.config["moe_renormalize"]:
+            topk_weight = _f32(topk_weight / (np.sum(topk_weight, axis=1, keepdims=True, dtype=np.float32) + np.float32(1e-20)))
+        topk_weight = _f32(topk_weight * np.float32(self.config["routed_scaling_factor"]))
+
+        expert_outputs = np.stack(
+            [
+                self.forward_mlp_expert(f"{prefix}.experts.{expert_idx}", hidden).reshape(batch * seq_len, hidden_size)
+                for expert_idx in range(self.config["num_experts"])
+            ],
+            axis=1,
+        )
+        gathered = np.take_along_axis(expert_outputs, topk_idx[:, :, None], axis=1)
+        output = _f32(np.sum(gathered * topk_weight[:, :, None], axis=1, dtype=np.float32)).reshape(batch, seq_len, hidden_size)
 
         shared_expert_count = self.config["num_shared_experts"]
         if shared_expert_count:
-            shared_outputs = [
-                self.forward_mlp_expert(f"{prefix}.shared_experts", hidden)
-                for _ in range(shared_expert_count)
-            ]
-            shared = np.sum(shared_outputs, axis=0, dtype=np.float32) / np.float32(shared_expert_count)
-            output = _f32(output + shared)
+            output = _f32(output + self.forward_mlp_expert(f"{prefix}.shared_experts", hidden))
 
         return _f32(output)
 
@@ -299,43 +368,66 @@ class KimiReferenceModel:
         up = self.linear(hidden, f"{prefix}.up_proj")
         return self.linear(_f32(gate * up), f"{prefix}.down_proj")
 
-    def apply_nope_policy(self, tensor: np.ndarray) -> np.ndarray:
-        if self.mla_use_nope or self.qk_nope_head_dim == 0:
-            return _f32(tensor)
-
-        batch, seq_len, heads, _ = tensor.shape
-        rope = tensor[:, :, :, self.qk_nope_head_dim : self.qk_head_dim]
-        zeros = np.zeros((batch, seq_len, heads, self.qk_nope_head_dim), dtype=np.float32)
-        return _f32(np.concatenate([zeros, rope], axis=3))
-
-    def expand_kv_heads(self, tensor: np.ndarray) -> np.ndarray:
-        if self.kv_repeat_factor == 1:
-            return _f32(tensor)
-        return _f32(np.repeat(tensor, self.kv_repeat_factor, axis=1))
-
     def causal_mask(self, seq_len: int) -> np.ndarray:
         positions = np.arange(seq_len, dtype=np.int64)
         allowed = positions[:, None] >= positions[None, :]
         mask = np.where(allowed, np.float32(0.0), np.float32(-1e9)).astype(np.float32)
         return mask.reshape(1, 1, seq_len, seq_len)
 
-    def short_conv_context(self, projected_keys: np.ndarray, kernel_size: int) -> np.ndarray:
-        batch, heads, seq_len, head_dim = projected_keys.shape
-        if kernel_size <= 1:
-            return np.zeros((batch, heads, seq_len, head_dim), dtype=np.float32)
-
-        windows = []
+    def apply_short_conv(self, projected: np.ndarray, weights: np.ndarray) -> np.ndarray:
+        batch, heads, seq_len, head_dim = projected.shape
+        kernel_size = int(weights.shape[-1])
+        reshaped_weights = weights.reshape(heads, head_dim, kernel_size)
+        outputs = []
         for token_offset in range(seq_len):
             end = token_offset + 1
             start = max(0, end - kernel_size)
-            window = np.mean(projected_keys[:, :, start:end, :], axis=2, dtype=np.float32)
-            windows.append(window[:, :, None, :])
-        return _f32(np.concatenate(windows, axis=2))
+            window = projected[:, :, start:end, :]
+            window_len = end - start
+            weight_slice = np.swapaxes(reshaped_weights[:, :, kernel_size - window_len : kernel_size], 1, 2)[None, :, :, :]
+            outputs.append(_silu(np.sum(window * weight_slice, axis=2, dtype=np.float32))[:, :, None, :])
+        return _f32(np.concatenate(outputs, axis=2))
+
+    def kda_gate(self, gate: np.ndarray, prefix: str) -> np.ndarray:
+        _, heads, _, head_dim = gate.shape
+        a_log = self.tensor(f"{prefix}.A_log").reshape(heads)
+        dt_bias = self.tensor(f"{prefix}.dt_bias").reshape(heads, head_dim)[None, :, None, :]
+        a = np.exp(a_log, dtype=np.float32).reshape(1, heads, 1, 1)
+        return _f32(-(a * _softplus(gate + dt_bias)))
+
+    def recurrent_kda(
+        self,
+        q: np.ndarray,
+        k: np.ndarray,
+        v: np.ndarray,
+        g: np.ndarray,
+        beta: np.ndarray,
+    ) -> np.ndarray:
+        batch, heads, seq_len, head_dim = q.shape
+        q = _f32(self.l2_normalize_last_dim(q) * np.float32(head_dim ** -0.5))
+        k = self.l2_normalize_last_dim(k)
+        state = np.zeros((batch, heads, head_dim, self.v_head_dim), dtype=np.float32)
+        outputs = []
+        for token_offset in range(seq_len):
+            q_i = q[:, :, token_offset, :]
+            k_i = k[:, :, token_offset, :]
+            v_i = v[:, :, token_offset, :]
+            g_i = g[:, :, token_offset, :]
+            beta_i = beta[:, :, token_offset]
+            state = _f32(state * np.exp(g_i, dtype=np.float32)[:, :, :, None])
+            projected_value = _f32(np.sum(state * k_i[:, :, :, None], axis=2, dtype=np.float32))
+            delta_value = _f32((v_i - projected_value) * beta_i[:, :, None])
+            state = _f32(state + k_i[:, :, :, None] * delta_value[:, :, None, :])
+            outputs.append(_f32(np.sum(state * q_i[:, :, :, None], axis=2, dtype=np.float32))[:, :, None, :])
+        return _f32(np.concatenate(outputs, axis=2))
+
+    def l2_normalize_last_dim(self, tensor: np.ndarray) -> np.ndarray:
+        norm = np.sqrt(np.sum(np.square(tensor, dtype=np.float32), axis=-1, keepdims=True, dtype=np.float32) + np.float32(1e-6))
+        return _f32(tensor / norm)
 
     def linear(self, x: np.ndarray, prefix: str) -> np.ndarray:
         weight = self.tensor(f"{prefix}.weight")
-        bias = self.tensor(f"{prefix}.bias")
-        return _f32(np.matmul(x, weight) + bias)
+        return _f32(np.matmul(x, weight))
 
     def tensor(self, name: str) -> np.ndarray:
         if name not in self.tensors:
@@ -455,6 +547,12 @@ def _validate_artifact_config(config: dict[str, Any]) -> None:
         "num_experts",
         "num_experts_per_token",
         "num_shared_experts",
+        "moe_renormalize",
+        "moe_router_activation_func",
+        "routed_scaling_factor",
+        "use_grouped_topk",
+        "num_expert_group",
+        "topk_group",
         "tie_word_embeddings",
         "use_cache",
         "rms_norm_eps",
@@ -470,6 +568,8 @@ def _validate_artifact_config(config: dict[str, Any]) -> None:
         raise GeneratorError("artifact config field 'hidden_act' must be 'silu'")
     if config.get("q_lora_rank") is not None:
         raise GeneratorError("artifact config field 'q_lora_rank' must be null for the current external baseline generator")
+    if config.get("moe_router_activation_func") not in ("softmax", "sigmoid"):
+        raise GeneratorError("artifact config field 'moe_router_activation_func' must be 'softmax' or 'sigmoid'")
     if bool(config.get("tie_word_embeddings")):
         raise GeneratorError("artifact config field 'tie_word_embeddings' must be false")
     if config.get("num_shared_experts") not in (0, 1):
@@ -492,8 +592,13 @@ def _validate_artifact_config(config: dict[str, Any]) -> None:
         "moe_layer_freq",
         "num_experts",
         "num_experts_per_token",
+        "num_expert_group",
+        "topk_group",
     ):
         _expect_positive_int(config.get(field), f"artifact config field '{field}'")
+    routed_scaling_factor = config.get("routed_scaling_factor")
+    if not isinstance(routed_scaling_factor, (int, float)) or not math.isfinite(routed_scaling_factor) or routed_scaling_factor <= 0:
+        raise GeneratorError("artifact config field 'routed_scaling_factor' must be finite and > 0")
 
     linear_attn = config.get("linear_attn_config")
     if not isinstance(linear_attn, dict):
@@ -601,6 +706,15 @@ def _validate_manifest_slice(slice_spec: Any, num_hidden_layers: int) -> bool:
         raise GeneratorError("baseline manifest field 'slice.import_selection.include_final_norm' must be true when compare_logits = true")
     if compare_logits and not bool(import_selection.get("include_lm_head")):
         raise GeneratorError("baseline manifest field 'slice.import_selection.include_lm_head' must be true when compare_logits = true")
+
+    required_through_layer = (num_hidden_layers - 1) if compare_logits else (max(selected_hidden_layers) if selected_hidden_layers else None)
+    if required_through_layer is not None:
+        missing_prefix = [layer_idx for layer_idx in range(required_through_layer + 1) if layer_idx not in import_layer_set]
+        if missing_prefix:
+            raise GeneratorError(
+                "baseline manifest field 'slice.import_selection.layer_indices' must contain the full executed prefix "
+                f"0..={required_through_layer}, missing {missing_prefix}"
+            )
 
     if not isinstance(slice_spec.get("requested_modules"), list) or not slice_spec["requested_modules"]:
         raise GeneratorError("baseline manifest field 'slice.requested_modules' must be a non-empty list")
@@ -915,6 +1029,11 @@ def _f32(value: Any) -> np.ndarray:
 def _softplus(x: np.ndarray) -> np.ndarray:
     array = _f32(x)
     return _f32(np.log1p(np.exp(-np.abs(array))) + np.maximum(array, np.float32(0.0)))
+
+
+def _sigmoid(x: np.ndarray) -> np.ndarray:
+    array = _f32(x)
+    return _f32(np.float32(1.0) / (_f32(np.exp(-array, dtype=np.float32)) + np.float32(1.0)))
 
 
 def _softmax(x: np.ndarray, axis: int) -> np.ndarray:

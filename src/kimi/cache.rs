@@ -46,18 +46,28 @@ pub enum KimiCacheError {
         max_history_len: usize,
     },
     KdaCacheBatchMismatch {
-        conv_batch: usize,
+        q_conv_batch: usize,
+        k_conv_batch: usize,
+        v_conv_batch: usize,
         recurrent_batch: usize,
-        running_batch: usize,
     },
     KdaCacheHeadCountMismatch {
-        conv_heads: usize,
+        q_conv_heads: usize,
+        k_conv_heads: usize,
+        v_conv_heads: usize,
         recurrent_heads: usize,
-        running_heads: usize,
     },
-    KdaCacheConvHeadDimMismatch {
-        conv_head_dim: usize,
+    KdaCacheQConvHeadDimMismatch {
+        q_conv_head_dim: usize,
         expected_head_dim: usize,
+    },
+    KdaCacheKConvHeadDimMismatch {
+        k_conv_head_dim: usize,
+        expected_head_dim: usize,
+    },
+    KdaCacheVConvHeadDimMismatch {
+        v_conv_head_dim: usize,
+        expected_value_dim: usize,
     },
     KdaCacheRecurrentHeadDimMismatch {
         recurrent_head_dim: usize,
@@ -66,10 +76,6 @@ pub enum KimiCacheError {
     KdaCacheRecurrentValueDimMismatch {
         recurrent_value_dim: usize,
         expected_value_dim: usize,
-    },
-    KdaCacheRunningKeyHeadDimMismatch {
-        running_key_head_dim: usize,
-        expected_head_dim: usize,
     },
 }
 
@@ -143,27 +149,43 @@ impl Display for KimiCacheError {
                 "KDA conv history ({history_len}) must be <= max_history_len ({max_history_len})"
             ),
             Self::KdaCacheBatchMismatch {
-                conv_batch,
+                q_conv_batch,
+                k_conv_batch,
+                v_conv_batch,
                 recurrent_batch,
-                running_batch,
             } => write!(
                 f,
-                "KDA cache batch mismatch: conv={conv_batch}, recurrent={recurrent_batch}, running_key={running_batch}"
+                "KDA cache batch mismatch: q_conv={q_conv_batch}, k_conv={k_conv_batch}, v_conv={v_conv_batch}, recurrent={recurrent_batch}"
             ),
             Self::KdaCacheHeadCountMismatch {
-                conv_heads,
+                q_conv_heads,
+                k_conv_heads,
+                v_conv_heads,
                 recurrent_heads,
-                running_heads,
             } => write!(
                 f,
-                "KDA cache head mismatch: conv={conv_heads}, recurrent={recurrent_heads}, running_key={running_heads}"
+                "KDA cache head mismatch: q_conv={q_conv_heads}, k_conv={k_conv_heads}, v_conv={v_conv_heads}, recurrent={recurrent_heads}"
             ),
-            Self::KdaCacheConvHeadDimMismatch {
-                conv_head_dim,
+            Self::KdaCacheQConvHeadDimMismatch {
+                q_conv_head_dim,
                 expected_head_dim,
             } => write!(
                 f,
-                "KDA conv-state head dim ({conv_head_dim}) must match expected head dim ({expected_head_dim})"
+                "KDA q-conv-state head dim ({q_conv_head_dim}) must match expected head dim ({expected_head_dim})"
+            ),
+            Self::KdaCacheKConvHeadDimMismatch {
+                k_conv_head_dim,
+                expected_head_dim,
+            } => write!(
+                f,
+                "KDA k-conv-state head dim ({k_conv_head_dim}) must match expected head dim ({expected_head_dim})"
+            ),
+            Self::KdaCacheVConvHeadDimMismatch {
+                v_conv_head_dim,
+                expected_value_dim,
+            } => write!(
+                f,
+                "KDA v-conv-state head dim ({v_conv_head_dim}) must match expected value dim ({expected_value_dim})"
             ),
             Self::KdaCacheRecurrentHeadDimMismatch {
                 recurrent_head_dim,
@@ -178,13 +200,6 @@ impl Display for KimiCacheError {
             } => write!(
                 f,
                 "KDA recurrent-state value dim ({recurrent_value_dim}) must match expected value dim ({expected_value_dim})"
-            ),
-            Self::KdaCacheRunningKeyHeadDimMismatch {
-                running_key_head_dim,
-                expected_head_dim,
-            } => write!(
-                f,
-                "KDA running-key head dim ({running_key_head_dim}) must match expected head dim ({expected_head_dim})"
             ),
         }
     }
@@ -295,9 +310,10 @@ impl<B: Backend> KimiMlaCache<B> {
 /// Linear-attention cache family for KDA layers.
 #[derive(Debug, Clone)]
 pub struct KimiKdaCache<B: Backend> {
-    conv_state: Tensor<B, 4>,
+    q_conv_state: Tensor<B, 4>,
+    k_conv_state: Tensor<B, 4>,
+    v_conv_state: Tensor<B, 4>,
     recurrent_state: Tensor<B, 4>,
-    running_key_sum: Tensor<B, 3>,
     processed_tokens: usize,
     max_history_len: usize,
     head_dim: usize,
@@ -306,46 +322,69 @@ pub struct KimiKdaCache<B: Backend> {
 
 impl<B: Backend> KimiKdaCache<B> {
     pub fn try_new(
-        conv_state: Tensor<B, 4>,
+        q_conv_state: Tensor<B, 4>,
+        k_conv_state: Tensor<B, 4>,
+        v_conv_state: Tensor<B, 4>,
         recurrent_state: Tensor<B, 4>,
-        running_key_sum: Tensor<B, 3>,
         processed_tokens: usize,
         max_history_len: usize,
         expected_head_dim: usize,
         expected_value_dim: usize,
     ) -> Result<Self, KimiCacheError> {
-        let [conv_batch, conv_heads, history_len, conv_head_dim] = conv_state.dims();
+        let [q_conv_batch, q_conv_heads, q_history_len, q_conv_head_dim] = q_conv_state.dims();
+        let [k_conv_batch, k_conv_heads, k_history_len, k_conv_head_dim] = k_conv_state.dims();
+        let [v_conv_batch, v_conv_heads, v_history_len, v_conv_head_dim] = v_conv_state.dims();
         let [recurrent_batch, recurrent_heads, recurrent_head_dim, recurrent_value_dim] =
             recurrent_state.dims();
-        let [running_batch, running_heads, running_key_head_dim] = running_key_sum.dims();
 
         if processed_tokens == 0 {
             return Err(KimiCacheError::KdaCacheMustTrackAtLeastOneToken);
         }
+        let history_len = q_history_len.max(k_history_len).max(v_history_len);
         if history_len > max_history_len {
             return Err(KimiCacheError::KdaCacheConvStateTooLong {
                 history_len,
                 max_history_len,
             });
         }
-        if conv_batch != recurrent_batch || conv_batch != running_batch {
+        if q_conv_batch != k_conv_batch
+            || q_conv_batch != v_conv_batch
+            || q_conv_batch != recurrent_batch
+        {
             return Err(KimiCacheError::KdaCacheBatchMismatch {
-                conv_batch,
+                q_conv_batch,
+                k_conv_batch,
+                v_conv_batch,
                 recurrent_batch,
-                running_batch,
             });
         }
-        if conv_heads != recurrent_heads || conv_heads != running_heads {
+        if q_conv_heads != k_conv_heads
+            || q_conv_heads != v_conv_heads
+            || q_conv_heads != recurrent_heads
+        {
             return Err(KimiCacheError::KdaCacheHeadCountMismatch {
-                conv_heads,
+                q_conv_heads,
+                k_conv_heads,
+                v_conv_heads,
                 recurrent_heads,
-                running_heads,
             });
         }
-        if conv_head_dim != expected_head_dim {
-            return Err(KimiCacheError::KdaCacheConvHeadDimMismatch {
-                conv_head_dim,
+        if q_conv_head_dim != expected_head_dim {
+            return Err(KimiCacheError::KdaCacheQConvHeadDimMismatch {
+                q_conv_head_dim,
                 expected_head_dim,
+            });
+        }
+        if k_conv_head_dim != expected_head_dim {
+            return Err(KimiCacheError::KdaCacheKConvHeadDimMismatch {
+                k_conv_head_dim,
+                expected_head_dim,
+            });
+        }
+        if v_conv_head_dim != expected_value_dim {
+            return Err(KimiCacheError::KdaCacheVConvHeadDimMismatch {
+                v_conv_head_dim,
+                expected_value_dim,
             });
         }
         if recurrent_head_dim != expected_head_dim {
@@ -360,17 +399,12 @@ impl<B: Backend> KimiKdaCache<B> {
                 expected_value_dim,
             });
         }
-        if running_key_head_dim != expected_head_dim {
-            return Err(KimiCacheError::KdaCacheRunningKeyHeadDimMismatch {
-                running_key_head_dim,
-                expected_head_dim,
-            });
-        }
 
         Ok(Self {
-            conv_state,
+            q_conv_state,
+            k_conv_state,
+            v_conv_state,
             recurrent_state,
-            running_key_sum,
             processed_tokens,
             max_history_len,
             head_dim: expected_head_dim,
@@ -380,15 +414,17 @@ impl<B: Backend> KimiKdaCache<B> {
 
     pub fn advance(
         &self,
-        conv_state: Tensor<B, 4>,
+        q_conv_state: Tensor<B, 4>,
+        k_conv_state: Tensor<B, 4>,
+        v_conv_state: Tensor<B, 4>,
         recurrent_state: Tensor<B, 4>,
-        running_key_sum: Tensor<B, 3>,
         new_tokens: usize,
     ) -> Result<Self, KimiCacheError> {
         Self::try_new(
-            conv_state,
+            q_conv_state,
+            k_conv_state,
+            v_conv_state,
             recurrent_state,
-            running_key_sum,
             self.processed_tokens + new_tokens,
             self.max_history_len,
             self.head_dim,
@@ -396,16 +432,24 @@ impl<B: Backend> KimiKdaCache<B> {
         )
     }
 
+    pub fn q_conv_state(&self) -> &Tensor<B, 4> {
+        &self.q_conv_state
+    }
+
+    pub fn k_conv_state(&self) -> &Tensor<B, 4> {
+        &self.k_conv_state
+    }
+
+    pub fn v_conv_state(&self) -> &Tensor<B, 4> {
+        &self.v_conv_state
+    }
+
     pub fn conv_state(&self) -> &Tensor<B, 4> {
-        &self.conv_state
+        &self.k_conv_state
     }
 
     pub fn recurrent_state(&self) -> &Tensor<B, 4> {
         &self.recurrent_state
-    }
-
-    pub fn running_key_sum(&self) -> &Tensor<B, 3> {
-        &self.running_key_sum
     }
 
     pub fn processed_tokens(&self) -> usize {

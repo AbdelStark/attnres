@@ -47,9 +47,10 @@ pub enum KimiBaselineParityCacheLayer {
     Kda {
         layer_idx: usize,
         processed_tokens: usize,
-        conv_state: KimiBaselineParityTensor,
+        q_conv_state: KimiBaselineParityTensor,
+        k_conv_state: KimiBaselineParityTensor,
+        v_conv_state: KimiBaselineParityTensor,
         recurrent_state: KimiBaselineParityTensor,
-        running_key_sum: KimiBaselineParityTensor,
     },
 }
 
@@ -379,16 +380,18 @@ fn assert_cache_layer_close(
             KimiBaselineParityCacheLayer::Kda {
                 layer_idx: expected_layer_idx,
                 processed_tokens: expected_processed_tokens,
-                conv_state: expected_conv_state,
+                q_conv_state: expected_q_conv_state,
+                k_conv_state: expected_k_conv_state,
+                v_conv_state: expected_v_conv_state,
                 recurrent_state: expected_recurrent_state,
-                running_key_sum: expected_running_key_sum,
             },
             KimiBaselineParityCacheLayer::Kda {
                 layer_idx: observed_layer_idx,
                 processed_tokens: observed_processed_tokens,
-                conv_state: observed_conv_state,
+                q_conv_state: observed_q_conv_state,
+                k_conv_state: observed_k_conv_state,
+                v_conv_state: observed_v_conv_state,
                 recurrent_state: observed_recurrent_state,
-                running_key_sum: observed_running_key_sum,
             },
         ) => {
             assert_eq!(observed_layer_idx, expected_layer_idx, "{label} layer_idx");
@@ -397,22 +400,28 @@ fn assert_cache_layer_close(
                 "{label} processed_tokens"
             );
             assert_tensor_close(
-                expected_conv_state,
-                observed_conv_state,
+                expected_q_conv_state,
+                observed_q_conv_state,
                 tolerance,
-                &format!("{label} conv_state"),
+                &format!("{label} q_conv_state"),
+            );
+            assert_tensor_close(
+                expected_k_conv_state,
+                observed_k_conv_state,
+                tolerance,
+                &format!("{label} k_conv_state"),
+            );
+            assert_tensor_close(
+                expected_v_conv_state,
+                observed_v_conv_state,
+                tolerance,
+                &format!("{label} v_conv_state"),
             );
             assert_tensor_close(
                 expected_recurrent_state,
                 observed_recurrent_state,
                 tolerance,
                 &format!("{label} recurrent_state"),
-            );
-            assert_tensor_close(
-                expected_running_key_sum,
-                observed_running_key_sum,
-                tolerance,
-                &format!("{label} running_key_sum"),
             );
         }
         _ => panic!("{label} cache kind mismatch"),
@@ -542,9 +551,10 @@ fn parity_kda_layer(
     KimiBaselineParityCacheLayer::Kda {
         layer_idx,
         processed_tokens: state.processed_tokens(),
-        conv_state: tensor_to_parity(state.conv_state().clone()),
+        q_conv_state: tensor_to_parity(state.q_conv_state().clone()),
+        k_conv_state: tensor_to_parity(state.k_conv_state().clone()),
+        v_conv_state: tensor_to_parity(state.v_conv_state().clone()),
         recurrent_state: tensor_to_parity(state.recurrent_state().clone()),
-        running_key_sum: tensor_to_parity(state.running_key_sum().clone()),
     }
 }
 

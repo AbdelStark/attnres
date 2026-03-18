@@ -7,11 +7,9 @@ import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
-from unittest.mock import patch
 
 import numpy as np
 
-from external.kimi_baseline_reference import generator as generator_module
 from external.kimi_baseline_reference.generator import (
     GeneratorError,
     PILOT_LOCAL_INIT_FLOAT32_DIGEST,
@@ -138,7 +136,7 @@ class GeneratorTests(unittest.TestCase):
             compare_logits=manifest["slice"].get("compare_logits", True),
         )
 
-        self.assertEqual(len(tensors), 26)
+        self.assertEqual(len(tensors), 0)
         self.assertEqual(
             local_init_tensor_float32_digest(tensors),
             PILOT_LOCAL_INIT_FLOAT32_DIGEST,
@@ -231,6 +229,31 @@ class GeneratorTests(unittest.TestCase):
                 local_init_contract_path=self.local_init_contract_path,
             )
 
+    def test_rejects_hidden_state_prefix_gaps(self) -> None:
+        manifest = self._load_json(self.manifest_path)
+        manifest["slice"]["compare_logits"] = False
+        manifest["slice"]["selected_hidden_layers"] = [1]
+        manifest["slice"]["import_selection"]["layer_indices"] = [1]
+        manifest["slice"]["import_selection"]["include_final_norm"] = False
+        manifest["slice"]["import_selection"]["include_lm_head"] = False
+        with self.assertRaisesRegex(GeneratorError, "must contain the full executed prefix 0..=1"):
+            generate_fixture(
+                artifact_dir=self.artifact_dir,
+                manifest_path=self._write_manifest("missing-prefix-hidden", manifest),
+                local_init_contract_path=self.local_init_contract_path,
+            )
+
+    def test_rejects_logits_without_full_layer_prefix(self) -> None:
+        manifest = self._load_json(self.manifest_path)
+        manifest["slice"]["selected_hidden_layers"] = []
+        manifest["slice"]["import_selection"]["layer_indices"] = [0]
+        with self.assertRaisesRegex(GeneratorError, "must contain the full executed prefix 0..=1"):
+            generate_fixture(
+                artifact_dir=self.artifact_dir,
+                manifest_path=self._write_manifest("missing-prefix-logits", manifest),
+                local_init_contract_path=self.local_init_contract_path,
+            )
+
     def test_rejects_duplicate_prompt_names(self) -> None:
         manifest = self._load_json(self.manifest_path)
         manifest["prompts"][1]["name"] = manifest["prompts"][0]["name"]
@@ -282,35 +305,13 @@ class GeneratorTests(unittest.TestCase):
             "local init contract schema mismatch: unexpected keys",
         )
 
-    def test_reconstruction_drift_fails_attnres_validation(self) -> None:
-        def drifted_reconstruction(
-            config: dict[str, Any],
-            seed: int,
-            required_tensors: list[str],
-            selected_hidden_layers: list[int],
-            compare_logits: bool,
-        ) -> dict[str, np.ndarray]:
-            tensors = reconstruct_local_init_tensors(
-                config=config,
-                seed=seed,
-                required_tensors=required_tensors,
-                selected_hidden_layers=selected_hidden_layers,
-                compare_logits=compare_logits,
-            )
-            tensors["lm_head.bias"] = tensors["lm_head.bias"].copy()
-            tensors["lm_head.bias"][0] += np.float32(5.0)
-            return tensors
-
-        with patch.object(
-            generator_module,
-            "reconstruct_local_init_tensors",
-            side_effect=drifted_reconstruction,
-        ):
-            fixture = generate_fixture(
-                artifact_dir=self.artifact_dir,
-                manifest_path=self.manifest_path,
-                local_init_contract_path=self.local_init_contract_path,
-            )
+    def test_tampered_fixture_fails_attnres_validation(self) -> None:
+        fixture = generate_fixture(
+            artifact_dir=self.artifact_dir,
+            manifest_path=self.manifest_path,
+            local_init_contract_path=self.local_init_contract_path,
+        )
+        fixture["prompt_results"][0]["hidden_states"][0]["tensor"]["values"][0] += 5.0
 
         self.fixture_path.write_text(json.dumps(fixture, indent=2) + "\n", encoding="utf-8")
         with self.assertRaises(subprocess.CalledProcessError):

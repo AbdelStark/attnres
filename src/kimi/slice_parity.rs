@@ -169,6 +169,11 @@ pub enum KimiBaselineSliceParityError {
         layer_idx: usize,
         import_selection_layers: Vec<usize>,
     },
+    ExecutedPrefixLayerNotInImportSelection {
+        layer_idx: usize,
+        required_through_layer: usize,
+        import_selection_layers: Vec<usize>,
+    },
     UnsupportedModuleRequest {
         module: KimiModuleRef,
     },
@@ -302,6 +307,15 @@ impl Display for KimiBaselineSliceParityError {
             } => write!(
                 f,
                 "selected hidden layer {layer_idx} is not present in the imported slice {:?}",
+                import_selection_layers
+            ),
+            Self::ExecutedPrefixLayerNotInImportSelection {
+                layer_idx,
+                required_through_layer,
+                import_selection_layers,
+            } => write!(
+                f,
+                "executed slice requires prefix layer {layer_idx} within 0..={required_through_layer}, but import_selection.layer_indices is {:?}",
                 import_selection_layers
             ),
             Self::UnsupportedModuleRequest { module } => write!(
@@ -481,6 +495,7 @@ impl KimiBaselineSliceRequestSpec {
             num_hidden_layers,
             &self.import_selection,
             &self.selected_hidden_layers,
+            self.compare_logits,
         )?;
         if !self.compare_logits && self.selected_hidden_layers.is_empty() {
             return Err(KimiBaselineSliceParityError::CompareLogitsDisabledWithoutHiddenStates);
@@ -679,6 +694,7 @@ impl KimiBaselineSliceParityFixture {
             self.artifact.num_hidden_layers,
             &self.slice.import_selection,
             &self.slice.selected_hidden_layers,
+            self.slice.compare_logits,
         )?;
         self.try_validate_prompt_metadata()?;
         Ok(())
@@ -1014,6 +1030,7 @@ fn validate_selected_hidden_layers(
     num_hidden_layers: usize,
     import_selection: &KimiImportSelection,
     selected_hidden_layers: &[usize],
+    compare_logits: bool,
 ) -> Result<(), KimiBaselineSliceParityError> {
     KimiImportSelection {
         layer_indices: selected_hidden_layers.to_vec(),
@@ -1031,6 +1048,26 @@ fn validate_selected_hidden_layers(
                     import_selection_layers: import_selection.layer_indices.clone(),
                 },
             );
+        }
+    }
+
+    let required_through_layer = if compare_logits {
+        Some(num_hidden_layers.saturating_sub(1))
+    } else {
+        selected_hidden_layers.iter().copied().max()
+    };
+
+    if let Some(required_through_layer) = required_through_layer {
+        for layer_idx in 0..=required_through_layer {
+            if !import_selection.layer_indices.contains(&layer_idx) {
+                return Err(
+                    KimiBaselineSliceParityError::ExecutedPrefixLayerNotInImportSelection {
+                        layer_idx,
+                        required_through_layer,
+                        import_selection_layers: import_selection.layer_indices.clone(),
+                    },
+                );
+            }
         }
     }
 

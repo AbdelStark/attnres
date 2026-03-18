@@ -1,7 +1,9 @@
+use burn::module::Module;
 use burn::nn::{Embedding, EmbeddingConfig, Linear, LinearConfig};
 use burn::prelude::*;
 use std::path::Path;
 
+use crate::kimi::bootstrap::KimiAttnResBootstrapPolicy;
 use crate::kimi::attn_res_layer::KimiAttnResDecoderLayer;
 use crate::kimi::attn_res_state::KimiAttnResBlockState;
 use crate::kimi::cache::{KimiCacheError, KimiDecodeCache};
@@ -16,7 +18,7 @@ use crate::two_phase::{
 };
 
 /// RFC 0004 AttnRes-Kimi model scaffold.
-#[derive(Debug)]
+#[derive(Module, Debug)]
 pub struct KimiAttnResModel<B: Backend> {
     embedding: Embedding<B>,
     layers: Vec<KimiAttnResDecoderLayer<B>>,
@@ -62,7 +64,9 @@ impl KimiAttnResConfig {
             final_norm: RmsNormConfig::new(self.hidden_size())
                 .with_eps(self.rms_norm_eps())
                 .init(device),
-            lm_head: LinearConfig::new(self.hidden_size(), self.vocab_size()).init(device),
+            lm_head: LinearConfig::new(self.hidden_size(), self.vocab_size())
+                .with_bias(false)
+                .init(device),
             layer_schedule: self.baseline.layer_schedule.clone(),
             use_cache: self.use_cache(),
         })
@@ -82,9 +86,15 @@ impl KimiArtifactUnderstanding {
         selection: KimiImportSelection,
         device: &B::Device,
     ) -> Result<KimiAttnResModel<B>, KimiBaselinePayloadError> {
-        let mut model = self.config.try_init_attn_res_model(num_blocks, device)?;
-        model.try_load_baseline_payloads_from_dir(self, dir, selection)?;
-        Ok(model)
+        Ok(self
+            .try_bootstrap_attn_res_model_from_dir(
+                dir,
+                num_blocks,
+                selection,
+                KimiAttnResBootstrapPolicy::default(),
+                device,
+            )?
+            .model)
     }
 }
 
