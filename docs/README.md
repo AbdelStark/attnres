@@ -14,10 +14,11 @@ in-repo: baseline-only local Gate 1 parity for a deterministic tiny-random
 Kimi-style fixture, baseline-only local Gate 2 payload-loading prep with real
 sharded payload bytes, baseline-only Gate 2 external-generator request
 manifests plus externally generated fixture consumption for the same supported
-`KimiLinearModel` subset, Gate 4 functional validation, reduced-config Gate 5
-numerical agreement, and reduced local benchmark scaffolding. Python/Hugging
-Face baseline parity, public-checkpoint parity, AttnRes-Kimi payload loading,
-and other external validation still remain deferred.
+`KimiLinearModel` subset, a narrow local external Python fixture-generator
+pilot for that handoff, Gate 4 functional validation, reduced-config Gate 5
+numerical agreement, and reduced local benchmark scaffolding. Hugging Face
+remote-code baseline parity, public-checkpoint parity, AttnRes-Kimi payload
+loading, and other external validation still remain deferred.
 
 - `specs/kimi-real-model-integration.md`: top-level specification for running
   `attnres` on a real model architecture, with Kimi Linear as the first target.

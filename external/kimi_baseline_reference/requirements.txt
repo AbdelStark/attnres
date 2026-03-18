@@ -1,0 +1,2 @@
+numpy==2.2.6
+safetensors==0.5.3

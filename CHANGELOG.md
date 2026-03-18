@@ -32,6 +32,13 @@ The repository did not maintain a structured changelog before March 16, 2026.
   negative tests for manifest kind/version drift, invalid selected-hidden-layer
   requests, prompt/tolerance drift against emitted manifests, and stale
   module/tensor manifest metadata.
+- A narrow RFC 0005 external-generator pilot in
+  `external/kimi_baseline_reference/`, plus the
+  `examples/kimi_rfc_0005_external_pilot.rs` bridge that writes a local pilot
+  artifact, emits the canonical request bundle, exports deterministic
+  `seeded-init-state.json`, validates generated fixtures through the existing
+  consumer path, and exercises explicit negative-path coverage on the Python
+  side.
 
 ### Changed
 
@@ -50,6 +57,10 @@ The repository did not maintain a structured changelog before March 16, 2026.
   handoff manifest slice as manifest emission plus external fixture
   consumption, without implying in-repo Hugging Face execution or any
   public-checkpoint parity claim.
+- Kimi milestone docs now describe the executed external-generator pilot as a
+  local Python bridge with explicit fixed-scope prompts, selected hidden
+  layers, and coarse recorded tolerances, while keeping public-checkpoint and
+  Hugging Face remote-code claims deferred.
 
 ### Fixed
 
