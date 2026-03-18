@@ -1,8 +1,11 @@
-# RFC 0005 External Baseline Reference Generator
+# RFC 0005 External Baseline Reference Paths
 
-This directory contains the current executable RFC 0005 Gate 2 external
-baseline-reference path for attnres-emitted slice manifests on the currently
-supported local Kimi baseline surface.
+This directory now contains two executable external RFC 0005 reference paths:
+
+- the baseline-slice generator for attnres-emitted local manifests on the
+  supported local Kimi baseline surface;
+- the public-checkpoint module-probe and smoke harnesses for
+  `moonshotai/Kimi-Linear-48B-A3B-Instruct`.
 
 ## What It Does
 
@@ -23,6 +26,9 @@ supported local Kimi baseline surface.
   - hidden-state-only fixtures when `compare_logits = false`
 - writes a schema-compatible `baseline-slice-parity.json`
 - leaves the Rust manifest/fixture consumer path unchanged
+- can also load official Hugging Face remote code for public Kimi module probes
+- can emit an honest full-checkpoint smoke report that records missing-shard or
+  RAM blockers explicitly
 
 No Rust tensor payload bridge is used anymore for this path.
 
@@ -167,15 +173,33 @@ For the current local compatibility surface, "external generation" now means:
 That is the full executed local contract in this checkout. It is not a
 public-checkpoint claim and not a Hugging Face remote-code claim.
 
+## Public Module-Probe And Smoke Paths
+
+Additional executable surfaces in this directory:
+
+- `module_probe.py` and `generate_module_probe_fixture.py`
+  - load official Hugging Face remote code for public Kimi
+  - generate fingerprinted probe fixtures for one KDA layer, one MLA layer,
+    final norm, and LM head
+  - support decode/cache comparisons for the selected attention modules
+- `remote_code_support.py`
+  - downloads official `configuration_kimi.py` and `modeling_kimi.py`
+  - loads them with a CPU fallback for `fla-core` pieces when the current
+    machine cannot import the official backend directly
+- `run_baseline_smoke.py`
+  - reports whether the full public checkpoint can be attempted on the current
+    host
+  - emits `blocked_missing_full_checkpoint` instead of pretending a smoke run
+    passed when shards or RAM are missing
+
 ## Deferred Work
 
 Remaining Gate 2 / Gate 3 dependencies are still deferred:
 
 - support additional local-init strategies beyond
   `burn.ndarray.lazy_linear_kaiming_uniform.v1`
-- support public-checkpoint artifacts instead of the local pilot artifact
-- support Hugging Face remote code in the external reference path
-- execute Gate 2 selected-layer parity against a real public checkpoint
-- execute Gate 3 end-to-end public-checkpoint smoke coverage
+- execute full-model public-checkpoint prompt-path smoke on a host with the
+  complete shard set and enough RAM
+- execute any real-checkpoint AttnRes quality evaluation after training
 - keep any future public-checkpoint claim blocked until the unchanged attnres
   consumer accepts the externally generated fixture for that checkpoint path

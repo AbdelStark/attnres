@@ -30,16 +30,25 @@ What is now implemented in this checkout:
 - local Gate 2 baseline and AttnRes payload-loading preparation slices;
 - a local external baseline slice-reference path that now accepts
   attnres-emitted hidden-only slice manifests in addition to full
-  logits-plus-hidden fixtures on the supported local surface.
+  logits-plus-hidden fixtures on the supported local surface;
+- executed public-checkpoint module-probe parity against the official
+  Hugging Face remote-code path for one KDA layer, one MLA layer, final norm,
+  and LM head, including decode/cache comparisons for the selected attention
+  modules;
+- an honest full-checkpoint smoke harness that reports blocked prerequisites
+  explicitly;
+- an explicit baseline-to-AttnRes bootstrap policy and load report;
+- reduced optimizer-backed AttnRes-Kimi training-stability validation on a
+  hybrid KDA/MLA plus dense/MoE reduced config.
 
 What is still missing for a meaningful real-model result:
 
-- public-checkpoint baseline parity against the Hugging Face reference;
-- end-to-end public-checkpoint smoke execution;
+- end-to-end public-checkpoint smoke success on the full 48B model in this
+  environment;
 - any AttnRes-Kimi checkpoint or trained warm-start that would make imported
   baseline tensors a meaningful quality test rather than a structural
   bootstrap;
-- training-stability and post-training quality validation for AttnRes-Kimi.
+- post-training quality validation for AttnRes-Kimi on a real checkpoint.
 
 The current status summary for this milestone lives in
 [`docs/status/kimi-real-model-status.md`](../status/kimi-real-model-status.md).
@@ -242,11 +251,10 @@ Exit criteria:
 
 Exit criteria:
 
-- tiny-random logits and hidden states match the Hugging Face reference within
-  agreed tolerances;
-- selected-layer probes on the public 48B checkpoint match the reference for
-  identical inputs;
-- stateful decode parity is demonstrated for both MLA and KDA paths.
+- tiny-random deterministic baseline parity remains locked in-repo;
+- selected public-checkpoint probes on the 48B checkpoint match the official
+  reference for identical inputs;
+- stateful decode parity is demonstrated for the selected MLA and KDA probes.
 
 ### M4. AttnRes-Kimi integration
 
@@ -269,17 +277,13 @@ Exit criteria:
 
 ## Current Critical Gap
 
-The immediate blocker to a meaningful real-model test is now not basic Kimi
-structure. That part exists.
+The immediate blocker to a meaningful real-model test is no longer selected
+module correctness. That slice is now executed and validated.
 
-The immediate blocker is external correctness validation:
+The immediate remaining baseline blocker is full-model smoke success on
+hardware that can honestly load the public 48B checkpoint end to end.
 
-- run the public Hugging Face Kimi reference on selected real checkpoint slices;
-- compare one MLA layer, one KDA layer, final norm, and LM head against the
-  local baseline implementation;
-- verify stateful decode parity on those slices.
-
-After that, the remaining AttnRes-specific blocker is training:
+After that, the remaining AttnRes-specific blocker is quality after training:
 
 - baseline Kimi weights are not an AttnRes checkpoint;
 - zero-initialized pseudo-queries do not preserve standard residual behavior;

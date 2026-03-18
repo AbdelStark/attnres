@@ -54,23 +54,41 @@ The repository now executes a narrow local subset of this RFC:
   consumer unchanged. That local external path now supports both
   logits-plus-hidden fixtures and hidden-state-only fixtures when
   `compare_logits = false`.
+- Gate 2 now also has an executed public-checkpoint module-probe path:
+  `src/kimi/module_probe.rs`, `examples/kimi_real_model_tools.rs`, and
+  `external/kimi_baseline_reference/module_probe.py` request and validate
+  fingerprinted public-checkpoint probes for one KDA layer, one MLA layer,
+  final norm, and LM head, including decode/cache traces for the attention
+  modules where applicable. The executed public reference path uses official
+  Hugging Face remote code and a CPU fallback for the `fla-core` pieces on the
+  current macOS CPU environment.
+- Gate 3 now has an executable public-checkpoint smoke harness in
+  `external/kimi_baseline_reference/run_baseline_smoke.py`. The executed
+  report path records assumptions, hardware, and missing-artifact blockers
+  explicitly instead of turning them into soft passes.
 - Gate 4 is executable in-repo through AttnRes-Kimi tests for dual AttnRes
   placement, mixed MLA/KDA block-state progression, embedding-block retention,
   and loud invariant-panics on corrupted internal state.
 - Gate 5 is executable in-repo only for reduced local configs through
   deterministic-seed tests that compare standard and two-phase hidden states
   plus final logits.
+- Gate 6 is now executable in-repo through
+  `tests/kimi_rfc_0005_gate6_training_stability_tests.rs`: a reduced hybrid
+  KDA/MLA plus dense/MoE config trains with Burn autodiff and Adam, compares
+  AttnRes-Kimi against a baseline Kimi control on deterministic batches and
+  seeds, and fails on explicit loss-growth, gradient-norm, activation-norm, or
+  non-finite regressions.
 - Gate 7 now has reduced local benchmark scaffolding for baseline Kimi
   forward/cached-forward and AttnRes-Kimi forward/two-phase runs, with
   benchmark ids that encode backend/model/sequence metadata.
 
-The following remain deferred and should not be implied by local results:
+The following remain deferred and should not be implied by these executed
+results:
 
 - Python/Hugging Face execution against `tiny-random/kimi-linear` for Gate 1.
-- Gate 2 selected-layer public-checkpoint parity against a real public
-  checkpoint.
-- Gate 3 end-to-end public-checkpoint smoke.
-- Gate 6 training-stability validation.
+- full-model public-checkpoint prompt-path success for Gate 3.
+- real-checkpoint AttnRes quality evaluation after training or continued
+  pretraining.
 - Any benchmark claim beyond the reduced local harnesses above.
 
 ## Principles
@@ -132,7 +150,7 @@ Pass condition:
 
 ### Gate 2: Public Kimi layer-slice parity
 
-Executable repo sub-slice:
+Executable repo sub-slices:
 
 - baseline-only local shard loading for selected supported tensors into
   `KimiLinearModel`
@@ -148,6 +166,9 @@ Executable repo sub-slice:
   the deterministic local-init subset externally, and returns a fixture
   accepted by the existing consumer for the requested local slice recipe,
   including hidden-only prefix slices
+- an executed public-checkpoint module-probe path for one KDA layer, one MLA
+  layer, final norm, and LM head, with decode/cache comparisons for the
+  attention modules plus explicit shard fingerprinting
 - local negative-path validation for missing shards, unsupported tensors,
   unsupported dtypes, tensor-shape mismatches, incomplete selected-module
   payloads, fixture kind/version drift, selected-layer mismatches,
@@ -164,20 +185,33 @@ Requirements:
 - parity checks on one MLA layer and one KDA layer
 - parity checks on final norm and LM head slices
 
+Executed public artifact:
+
+- `moonshotai/Kimi-Linear-48B-A3B-Instruct`
+- revision `e1df551a447157d4658b573f9a695d57658590e9`
+- required executed shards:
+  `model-00001-of-00020.safetensors`,
+  `model-00002-of-00020.safetensors`,
+  `model-00020-of-00020.safetensors`
+
 Pass condition:
 
-- targeted hidden-state parity within agreed tolerances
+- targeted module parity within agreed tolerances for one KDA layer, one MLA
+  layer, final norm, and LM head
+- decode/cache parity for the selected MLA and KDA module probes
 
 Still deferred in this checkout:
 
-- execution of Hugging Face / Python / public-checkpoint generators inside
-  this repository beyond the local artifact bridge
-- Hugging Face remote-code reference execution inside this repository
-- public-checkpoint payloads
-- any public-checkpoint parity claim until an external reference actually
-  produces matching fixtures against the deterministic seeded slice recipe
+- full-model prompt-path parity on the public checkpoint
+- any claim that the selected-module parity results imply end-to-end 48B smoke
+  success
+- any AttnRes parity claim on a real public checkpoint
 
 ### Gate 3: End-to-end baseline smoke
+
+Executable repo target:
+
+- `external/kimi_baseline_reference/run_baseline_smoke.py`
 
 Requirements:
 
@@ -189,6 +223,16 @@ Requirements:
 Pass condition:
 
 - consistent prompt completion behavior on a fixed smoke suite
+
+Executed status on 2026-03-18:
+
+- harness executed against
+  `moonshotai/Kimi-Linear-48B-A3B-Instruct`
+  revision `e1df551a447157d4658b573f9a695d57658590e9`
+- result: `blocked_missing_full_checkpoint`
+- executed blocker details:
+  17 of 20 shards missing locally and host RAM `51,539,607,552` bytes below
+  the configured CPU minimum `106,835,463,168` bytes
 
 ### Gate 4: AttnRes-Kimi functional validation
 
@@ -217,6 +261,10 @@ Pass condition:
 
 ### Gate 6: Training-stability validation
 
+Executable repo target:
+
+- `tests/kimi_rfc_0005_gate6_training_stability_tests.rs`
+
 Requirements:
 
 - reduced Kimi-style training run with AttnRes enabled
@@ -226,6 +274,15 @@ Requirements:
 Pass condition:
 
 - no divergence attributable to obvious implementation error
+
+Executed status on 2026-03-18:
+
+- reduced hybrid KDA/MLA plus dense/MoE training test passes for deterministic
+  seeds `20260318` and `20260319`
+- harness records loss trajectories plus explicit hidden/logit RMS and
+  whole-model gradient L2 caps
+- AttnRes-Kimi is checked against a baseline Kimi control instead of being
+  evaluated in isolation
 
 ### Gate 7: Benchmark reporting
 

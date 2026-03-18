@@ -10,17 +10,20 @@ inspection, tensor coverage reporting, selected-layer/full shard planning,
 explicit dtype policy, and local payload loading for the supported baseline
 tensor subset into both `KimiLinearModel` and `KimiAttnResModel`, plus RFC
 0004 AttnRes-Kimi execution scaffolding with a separate model/layer/state
-path. RFC 0005 is now partially executable in-repo: baseline-only local Gate 1
-parity for a deterministic tiny-random Kimi-style fixture, local Gate 2
-payload-loading prep with real sharded payload bytes, baseline-only Gate 2
-external-generator request manifests plus externally generated fixture
-consumption for the supported `KimiLinearModel` subset, a local external
-Python fixture-generator path for that handoff that now supports hidden-only
-prefix slices as well as full logits fixtures, Gate 4 functional
-validation, reduced-config Gate 5 numerical agreement, and reduced local
-benchmark scaffolding. Hugging Face remote-code baseline parity,
-public-checkpoint parity, AttnRes-Kimi external parity generation, and other
-external validation still remain deferred.
+path. RFC 0005 is now executable through Gate 6 for the strongest slices this
+checkout can honestly support: local Gate 1 parity for a deterministic
+tiny-random Kimi-style fixture, local Gate 2 payload-loading prep with real
+sharded payload bytes, baseline-only Gate 2 external-generator request
+manifests plus externally generated fixture consumption for the supported
+`KimiLinearModel` subset, a local external Python fixture-generator path for
+that handoff that now supports hidden-only prefix slices as well as full
+logits fixtures, executed public-checkpoint module-probe parity against the
+official Hugging Face remote-code path, an honest full-checkpoint smoke
+harness with blocked-state reporting, Gate 4 functional validation,
+reduced-config Gate 5 numerical agreement, Gate 6 reduced training-stability
+validation, and reduced local benchmark scaffolding. Full 48B smoke success,
+real-checkpoint AttnRes quality evaluation, and reportable benchmark claims
+still remain deferred.
 
 - `status/kimi-real-model-status.md`: current milestone status, the exact gap
   to a meaningful real-model test, and the next critical blockers.

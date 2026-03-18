@@ -40,9 +40,14 @@ require validated performance and operational guarantees.
 
 For the Kimi real-model milestone specifically, see
 [docs/status/kimi-real-model-status.md](docs/status/kimi-real-model-status.md).
-As of March 18, 2026, the repo is structurally ready for public-checkpoint
-baseline correctness work, but it has not yet crossed the bar for a meaningful
-real-model AttnRes result.
+As of March 18, 2026, the repo has code-backed selected-module
+public-checkpoint baseline correctness for
+`moonshotai/Kimi-Linear-48B-A3B-Instruct`, an honest full-checkpoint smoke
+harness, an explicit baseline-to-AttnRes bootstrap policy, and reduced
+optimizer-backed training-stability validation. It still has not crossed the
+bar for a meaningful real-model AttnRes result because full 48B smoke remains
+blocked in this environment and no real-checkpoint AttnRes quality evaluation
+has run.
 
 Known limitations:
 
@@ -117,16 +122,25 @@ Known limitations:
 - That external-generator slice is still intentionally local-only, but it is
   no longer locked to one fixed pilot manifest: the current contract now
   supports both full logits-plus-hidden fixtures and hidden-state-only prefix
-  fixtures on the supported local baseline surface. It still does not imply
-  in-repo Hugging Face remote-code execution, public-checkpoint parity, or
-  tight numerical agreement beyond the executed local artifact coverage.
-- Python/Hugging Face baseline parity work, public-checkpoint validation,
-  AttnRes-Kimi external parity generation, optimized KDA kernels, training
-  stability validation, and any benchmark conclusions beyond the reduced local
-  harnesses are still deferred.
-- No public-checkpoint parity claim is made for either baseline Kimi or
-  AttnRes-Kimi until an external reference actually produces matching baseline
-  slice fixtures.
+  fixtures on the supported local baseline surface.
+- RFC 0005 now also has an executed public-checkpoint module-probe path in
+  `external/kimi_baseline_reference/` plus
+  `examples/kimi_real_model_tools.rs`: official Hugging Face remote code is
+  loaded for `moonshotai/Kimi-Linear-48B-A3B-Instruct` revision
+  `e1df551a447157d4658b573f9a695d57658590e9`, selected public shards are
+  fingerprinted, and the Rust path is validated against one KDA layer, one MLA
+  layer, final norm, LM head, and decode/cache traces where applicable.
+- RFC 0005 now also has an honest full-checkpoint smoke harness:
+  `external/kimi_baseline_reference/run_baseline_smoke.py` reports executed
+  smoke assumptions and returns a blocked status instead of a false pass when
+  the full 48B artifact set or required RAM is unavailable.
+- RFC 0005 now also has reduced optimizer-backed training-stability coverage in
+  `tests/kimi_rfc_0005_gate6_training_stability_tests.rs` for a hybrid
+  KDA/MLA plus dense/MoE reduced config, with explicit loss-growth, activation,
+  gradient, and non-finite failure criteria against a baseline Kimi control.
+- Full public-checkpoint prompt-path success, real-checkpoint AttnRes quality
+  evaluation after training, optimized KDA kernels, and reportable benchmark
+  conclusions beyond the reduced/local harnesses remain deferred.
 - No compatibility promise for a stable 1.0 public API yet.
 - No dedicated formal spec document is checked into this repository today.
 
@@ -225,29 +239,29 @@ support" claim.
   selected-layer/full shard plans, explicit `bfloat16` to local-runtime dtype
   policy, plus local payload loading for the currently supported baseline
   tensor subset.
-- Phase C: baseline parity. Partially implemented in this checkout only as a
-  local fixture-backed Gate 1 subset for the baseline `KimiLinearModel` path:
-  deterministic tiny-random Kimi-style config/index validation plus fixed-prompt
-  logits, selected hidden-state, and cache-trace checks against a committed
-  reference bundle. Python/Hugging Face execution and public-checkpoint parity
-  remain deferred.
+- Phase C: baseline parity. Implemented in this checkout for two executed
+  slices: local Gate 1 deterministic tiny-random parity for the baseline
+  `KimiLinearModel` path, plus selected-module public-checkpoint parity against
+  the official Hugging Face remote-code path for one KDA layer, one MLA layer,
+  final norm, LM head, and decode/cache traces.
 - Phase D: AttnRes-Kimi integration. Implemented in this checkout as execution
   scaffolding plus local artifact bootstrap for the supported baseline tensor
   subset: separate AttnRes-Kimi model/layer/state types, explicit
   cache-vs-block-state handling, sublayer-space block boundaries, local shard
   loading for baseline-compatible tensors, and reduced-config two-phase
-  equivalence coverage. Baseline parity, public checkpoint compatibility, and
+  equivalence coverage. Real-checkpoint AttnRes quality evaluation and
   optimized kernels remain deferred.
 - Phase E: validation and benchmark scaffolding. Partially implemented in this
   checkout for local deterministic fixtures and reduced configs only: baseline
   Gate 1 fixture-backed parity, local Gate 2 payload-loading prep for the
   supported baseline subset into both baseline and AttnRes-Kimi models,
   baseline-only Gate 2 external-generator request manifests plus external
-  fixture consumption for locally loadable sharded slices, Gate 4 functional
-  tests, reduced Gate 5 numerical agreement checks, and reduced local
-  benchmark groups. Public checkpoint fixture generation/parity,
-  Python/Hugging Face reference work, training validation, and reportable
-  benchmark claims remain deferred.
+  fixture consumption for locally loadable sharded slices, public-checkpoint
+  module-probe parity, an honest Gate 3 smoke harness with blocked-state
+  reporting, Gate 4 functional tests, reduced Gate 5 numerical agreement
+  checks, reduced Gate 6 training-stability validation, and reduced local
+  benchmark groups. Full 48B smoke success and reportable benchmark claims
+  remain deferred.
 
 See [docs/rfcs/0001-real-model-milestone-scope.md](docs/rfcs/0001-real-model-milestone-scope.md)
 for the accepted sequencing and scope boundaries.
@@ -261,6 +275,7 @@ Rust examples:
 
 ```bash
 cargo run --example compare_residuals
+cargo run --example kimi_real_model_tools -- emit-module-probe-request <artifact-dir> <output-path>
 cargo run --example train_tiny
 cargo run --example visualize_weights
 cargo run --example demo_tui --release

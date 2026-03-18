@@ -6,208 +6,212 @@ Branch: `codex/kimi-real-model-rfc`
 
 ## Executive Summary
 
-`attnres` is now structurally ready for real-model integration work on Kimi
-Linear, but it is not yet at the point where the project can honestly claim a
-meaningful real-model AttnRes result.
+`attnres` has now cleared the public-checkpoint baseline correctness critical
+path for the strongest slice this checkout and environment can honestly
+support:
 
-The repository can now:
-
-- represent the Kimi Linear decoder schedule locally, including mixed MLA/KDA
-  attention and dense-vs-MoE feed-forward placement;
-- parse and validate Hugging Face-style Kimi `config.json` and
-  `model.safetensors.index.json` artifacts;
-- plan selected-layer imports and report unsupported, duplicate, and missing
-  tensors explicitly;
-- load the currently supported baseline tensor subset from local sharded
-  `safetensors` artifacts into both `KimiLinearModel` and `KimiAttnResModel`;
-- validate local deterministic fixture behavior for baseline Kimi, plus
-  functional and reduced-config numerical behavior for AttnRes-Kimi.
+- selected-module public-checkpoint parity now passes against the official
+  Hugging Face remote-code path for
+  `moonshotai/Kimi-Linear-48B-A3B-Instruct`;
+- the executed parity surface covers one KDA layer, one MLA layer, final norm,
+  LM head, and decode/cache traces for the selected attention modules;
+- an honest full-checkpoint smoke harness now exists and was executed;
+- baseline-to-AttnRes bootstrap is now explicit and reported as structural
+  bootstrap only;
+- reduced Kimi-style AttnRes training-stability validation now passes with a
+  real Burn optimizer loop and explicit failure criteria.
 
 The repository still cannot honestly claim:
 
-- public-checkpoint baseline parity against Hugging Face remote code;
-- end-to-end smoke execution on the public 48B checkpoint;
-- meaningful AttnRes quality evaluation on a real Kimi checkpoint without
-  continued pretraining or fresh training;
-- reportable benchmark conclusions beyond the reduced local harnesses.
+- successful full-model smoke on the public 48B checkpoint in this environment;
+- any real-checkpoint AttnRes quality result after training or continued
+  pretraining;
+- validated `fla-core` kernel parity or performance on this macOS CPU host;
+- reportable benchmark conclusions beyond the reduced/local harnesses.
 
-## Current State By Phase
+## Executed Evidence
+
+### Public Baseline Correctness
+
+Executed public artifact:
+
+- repo: `moonshotai/Kimi-Linear-48B-A3B-Instruct`
+- revision: `e1df551a447157d4658b573f9a695d57658590e9`
+- dtype: `bfloat16`
+- shard fingerprint coverage:
+  - `model-00001-of-00020.safetensors` for KDA layer 0
+  - `model-00002-of-00020.safetensors` for MLA layer 3
+  - `model-00020-of-00020.safetensors` for final norm and LM head
+
+Executed commands:
+
+- emit request:
+  `cargo run --example kimi_real_model_tools -- emit-module-probe-request /tmp/attnres-kimi-public-probe /tmp/attnres-kimi-public-probe/module-probe-request.json`
+- generate public fixture:
+  `python -m external.kimi_baseline_reference.generate_module_probe_fixture --artifact-dir /tmp/attnres-kimi-public-probe --request-path /tmp/attnres-kimi-public-probe/module-probe-request.json --output-path /tmp/attnres-kimi-public-probe/module-probe-fixture.json --repo-id moonshotai/Kimi-Linear-48B-A3B-Instruct --revision e1df551a447157d4658b573f9a695d57658590e9`
+- validate public fixture:
+  `cargo run --example kimi_real_model_tools -- validate-module-probe-fixture /tmp/attnres-kimi-public-probe /tmp/attnres-kimi-public-probe/module-probe-request.json /tmp/attnres-kimi-public-probe/module-probe-fixture.json`
+
+Observed result:
+
+- public module-probe parity passed for:
+  - `kda_layer_0_seq4`
+  - `mla_layer_3_seq4`
+  - `final_norm_seq4`
+  - `lm_head_seq4`
+- decode/cache comparisons also passed for the selected KDA and MLA probes
+- the executed public reference path used official Hugging Face remote code
+  with the `cpu_fallback` backend for the `fla-core` pieces on this host
+
+### End-to-End Smoke
+
+Executed command:
+
+- `python -m external.kimi_baseline_reference.run_baseline_smoke --artifact-dir /tmp/attnres-kimi-public-probe --output-path /tmp/attnres-kimi-public-probe/baseline-smoke-report.json --repo-id moonshotai/Kimi-Linear-48B-A3B-Instruct --revision e1df551a447157d4658b573f9a695d57658590e9`
+
+Observed result:
+
+- status: `blocked_missing_full_checkpoint`
+- host: Apple M4 Max CPU with `51,539,607,552` bytes RAM
+- checkpoint size: `98,245,528,576` bytes
+- configured minimum CPU RAM for attempted smoke:
+  `106,835,463,168` bytes
+- local shard state:
+  - present: 3 / 20
+  - missing: 17 / 20
+
+This is an executed blocker report, not a soft failure and not a hidden gap.
+
+### Bootstrap Policy
+
+The baseline-to-AttnRes transition is now explicit in code:
+
+- policy:
+  `KimiAttnResBootstrapPolicy::BaselineImportWithFreshAttnRes`
+- entry point:
+  `KimiArtifactUnderstanding::try_bootstrap_attn_res_model_from_dir`
+- report:
+  `KimiAttnResBootstrapReport`
+
+The load report now states plainly that:
+
+- baseline-compatible tensors are imported only into matching baseline modules;
+- every AttnRes operator remains freshly initialized;
+- zero pseudo-query initialization is preserved;
+- the result is structural bootstrap only and does not justify parity, quality,
+  or benchmark claims before additional training succeeds.
+
+### Reduced Training-Stability Validation
+
+Executed repo target:
+
+- `tests/kimi_rfc_0005_gate6_training_stability_tests.rs`
+
+Observed result:
+
+- passes on deterministic seeds `20260318` and `20260319`
+- trains a reduced hybrid KDA/MLA plus dense/MoE config with Burn autodiff and
+  Adam
+- compares AttnRes-Kimi against a baseline Kimi control on the same
+  deterministic batches
+- fails explicitly on:
+  - non-finite loss
+  - non-finite hidden states or logits
+  - non-finite gradients
+  - excessive loss growth
+  - excessive whole-model gradient L2 norm
+  - excessive hidden/logit RMS growth
+
+## Phase Status
 
 ### Phase A: Artifact Understanding
 
 Status: implemented
 
-Implemented in-repo:
-
-- typed Kimi config parsing and validation;
-- typed layer-schedule decoding;
-- sharded safetensors index parsing;
-- selected-layer/full import planning;
-- explicit dtype policy and coverage reporting.
+- typed config parsing and validation
+- layer-schedule decoding
+- shard-index parsing
+- selected-layer/full import planning
+- explicit dtype-policy handling
 
 ### Phase B: Baseline Kimi Implementation
 
 Status: implemented
 
-Implemented in-repo:
-
-- separate `KimiLinearModel` path;
-- MLA and KDA execution scaffolding;
-- dense SiLU MLP and sparse MoE execution scaffolding;
-- separate decode-cache types for MLA and KDA.
+- separate `KimiLinearModel`
+- typed MLA and KDA execution paths
+- dense SiLU MLP and sparse MoE execution paths
+- decode-cache support for MLA and KDA
 
 ### Phase C: Baseline Parity
 
-Status: partially implemented
+Status: implemented for the selected-module slice that this environment can
+honestly validate
 
-Implemented in-repo:
-
-- local deterministic tiny-random Gate 1 fixture-backed parity for baseline
-  Kimi;
-- local Gate 2 payload-loading prep for the supported baseline tensor subset;
-- baseline-only external slice-request / slice-fixture handoff for the current
-  supported local baseline surface, including hidden-state-only slices that do
-  not force final norm or LM head loading; the executed regression lock is
-  still the narrow local pilot artifact.
+- local deterministic Gate 1 parity remains locked
+- public selected-module parity now passes for one KDA layer, one MLA layer,
+  final norm, LM head, and decode/cache traces
 
 Still missing:
 
-- Hugging Face / Python execution against the public Kimi reference;
-- selected-layer parity on the public 48B checkpoint;
-- stateful decode parity against the public reference on real slices.
+- full-model prompt-path smoke success on the public 48B checkpoint
 
 ### Phase D: AttnRes-Kimi Integration
 
-Status: partially implemented
+Status: implemented as a structural bootstrap and reduced-config execution path
 
-Implemented in-repo:
-
-- separate `KimiAttnResModel`, `KimiAttnResDecoderLayer`, and block-state path;
-- dual AttnRes placement per decoder layer;
-- sublayer-space block-boundary handling;
-- reduced-config standard-vs-two-phase numerical agreement;
-- local shard loading for the same supported baseline tensor subset used by
-  `KimiLinearModel`, while keeping AttnRes operator parameters locally
-  initialized.
+- separate `KimiAttnResModel`, `KimiAttnResDecoderLayer`, and block-state path
+- dual AttnRes placement per decoder layer
+- sublayer-space block boundaries
+- explicit baseline-to-AttnRes bootstrap policy and report
+- reduced-config standard-vs-two-phase agreement
 
 Still missing:
 
-- any public-checkpoint AttnRes parity surface;
-- any trained AttnRes-Kimi checkpoint or continued-pretraining result;
-- any evidence that imported baseline weights plus locally initialized AttnRes
-  operators produce meaningful quality on real prompts.
+- any trained real-checkpoint AttnRes result
+- any claim that imported baseline tensors plus fresh AttnRes operators are
+  meaningful quality evaluation
 
-### Phase E: Benchmark And Training Validation
+### Phase E: Validation And Benchmark Work
 
-Status: mostly deferred
+Status: materially advanced, but not benchmark-complete
 
-Implemented in-repo:
-
-- reduced local benchmark scaffolding;
-- written benchmark-gate structure in RFC 0005.
+- Gate 1 local deterministic parity
+- Gate 2 local payload loading for baseline and AttnRes-Kimi
+- Gate 2 external slice-request / slice-fixture contract
+- Gate 2 public module-probe parity against official remote code
+- Gate 3 smoke harness with honest blocked-state reporting
+- Gate 4 functional tests
+- Gate 5 reduced numerical agreement
+- Gate 6 reduced optimizer-backed training stability
 
 Still missing:
 
-- training-stability validation;
-- quality evaluation after training or continued pretraining;
-- public-checkpoint throughput or end-to-end smoke measurements;
-- benchmark numbers that would support external claims.
+- successful full-model public smoke
+- real-checkpoint AttnRes quality evaluation
+- benchmark numbers suitable for external claims
 
-## What Counts As A Meaningful Real-Model Test
+## Honest Remaining Limitations
 
-This milestone now needs two separate definitions of "meaningful":
+1. Public selected-module correctness is not the same as full 48B prompt-path
+   success. The repo now has strong evidence that the local loader and module
+   math align on key public slices, but the full model still has not run end to
+   end on this machine.
+2. The executed public reference path used official Hugging Face remote code
+   with a CPU fallback for the `fla-core` operators. That is acceptable for
+   correctness validation here, but it is not evidence for kernel parity or
+   performance parity.
+3. The AttnRes real-model story remains a bootstrap plus stability result, not
+   a quality result. Real-checkpoint AttnRes evaluation still needs additional
+   training and post-training measurement.
 
-### 1. Meaningful Baseline Real-Model Test
+## Project-Lead Status
 
-This means proving that the local baseline Kimi path is numerically aligned
-with the public Kimi reference on real checkpoint slices.
+As of 2026-03-18, the repo has closed the selected-module public-checkpoint
+baseline correctness path, added an honest full-checkpoint smoke harness,
+made the AttnRes bootstrap policy explicit, and executed reduced Kimi-style
+training-stability validation.
 
-Minimum bar:
-
-- load selected tensors from the public `moonshotai/Kimi-Linear-48B-A3B-Instruct`
-  artifact;
-- compare one MLA layer, one KDA layer, final norm, and LM head against an
-  external Hugging Face reference on identical token inputs;
-- verify stateful decode parity for the selected slices, not just single-pass
-  hidden states;
-- document exact tolerances, hardware, and which tensors were actually loaded.
-
-### 2. Meaningful AttnRes Real-Model Test
-
-This means showing that the AttnRes-augmented Kimi path behaves coherently on a
-real Kimi-style model after an honest bootstrap/training story, not merely
-after loading baseline tensors into a structurally modified model.
-
-Minimum bar:
-
-- start from a stated bootstrap policy for baseline-to-AttnRes transition;
-- run continued pretraining or fresh reduced-model training;
-- pass training-stability checks;
-- report quality and overhead separately from baseline-parity correctness.
-
-## The Current Gap
-
-The remaining gap is not one thing. It is two stacked blockers.
-
-### Blocker 1: Public Baseline Correctness
-
-The repository still needs an external reference harness that can execute the
-public Hugging Face Kimi implementation and return comparable slice fixtures.
-
-The local manifest/fixture contract is no longer the main blocker here:
-
-- attnres can now emit slice requests that compare selected hidden states
-  without forcing final logits;
-- the local external Python path can now consume those manifests and return
-  schema-compatible hidden-only fixtures;
-- the unchanged Rust consumer can validate those fixtures against local shard
-  loading.
-
-Without that, the project cannot answer:
-
-- Are we loading public Kimi tensors correctly?
-- Are MLA and KDA cache semantics numerically aligned with the public model?
-- Are observed differences import bugs, kernel differences, or real model
-  mismatches?
-
-### Blocker 2: AttnRes-Specific Evaluation
-
-Even if baseline public-checkpoint parity lands, that still does not create a
-meaningful AttnRes result by itself.
-
-Why:
-
-- the public checkpoint is baseline Kimi, not AttnRes-Kimi;
-- zero-initialized pseudo-queries are not equivalent to standard residual
-  addition;
-- imported baseline tensors plus locally initialized AttnRes operators are only
-  a research bootstrap, not a benchmark-ready model.
-
-Therefore a meaningful AttnRes real-model test still requires:
-
-- a clearly documented warm-start or training policy;
-- reduced Kimi-style stability validation;
-- quality evaluation after training.
-
-## Immediate Next Steps
-
-In priority order:
-
-1. Build or harden the external Hugging Face reference harness for public
-   slice-generation on Kimi Linear 48B. The local hidden-only contract is now
-   in place, so this step is primarily about public artifacts and remote-code
-   execution rather than more local manifest plumbing.
-2. Execute Gate 2 public slice parity on at least one MLA layer, one KDA
-   layer, final norm, and LM head.
-3. Execute Gate 3 end-to-end baseline smoke on suitable hardware.
-4. Define the baseline-to-AttnRes bootstrap policy explicitly.
-5. Run Gate 6 reduced Kimi-style AttnRes training-stability validation before
-   attempting any quality or benchmark claim.
-
-## Honest Project-Lead Status
-
-As of 2026-03-18, the project has cleared the local architecture-and-artifact
-plumbing stage for Kimi integration and has enough scaffolding to make public
-baseline parity the next serious correctness milestone.
-
-It has not yet cleared the bar for a meaningful real-model AttnRes result.
+The strongest honest blocker that remains is full-model public smoke success on
+hardware with the full shard set and enough RAM, followed by real-checkpoint
+AttnRes quality evaluation after training.
