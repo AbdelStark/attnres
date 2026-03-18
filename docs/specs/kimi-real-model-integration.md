@@ -1,7 +1,7 @@
 # Real-Model Integration Specification: Kimi Linear First
 
-Status: Draft  
-Date: 2026-03-17  
+Status: Draft
+Date: 2026-03-18
 Branch: `codex/kimi-real-model-rfc`
 
 ## Why This Exists
@@ -11,6 +11,35 @@ burn-native reference Transformer. That is necessary but not sufficient for the
 next milestone. The next serious step is to run the framework on a real model
 architecture and on real checkpoint artifacts, with enough validation that a
 negative result is trusted and a positive result is meaningful.
+
+## Current Status As Of 2026-03-18
+
+What is now implemented in this checkout:
+
+- local Kimi artifact understanding for official-style `config.json` and
+  `model.safetensors.index.json`;
+- a separate baseline `KimiLinearModel` execution path with typed MLA/KDA,
+  dense MLP, sparse MoE, and cache families;
+- a separate `KimiAttnResModel` execution path with dual AttnRes placement,
+  sublayer-space block boundaries, and reduced-config two-phase agreement
+  checks;
+- local shard loading for the currently supported baseline tensor subset into
+  both model families;
+- local deterministic Gate 1 baseline parity on a tiny-random Kimi-style
+  fixture;
+- local Gate 2 baseline and AttnRes payload-loading preparation slices.
+
+What is still missing for a meaningful real-model result:
+
+- public-checkpoint baseline parity against the Hugging Face reference;
+- end-to-end public-checkpoint smoke execution;
+- any AttnRes-Kimi checkpoint or trained warm-start that would make imported
+  baseline tensors a meaningful quality test rather than a structural
+  bootstrap;
+- training-stability and post-training quality validation for AttnRes-Kimi.
+
+The current status summary for this milestone lives in
+[`docs/status/kimi-real-model-status.md`](../status/kimi-real-model-status.md).
 
 The ideal first target is Kimi Linear because:
 
@@ -81,6 +110,11 @@ framing is:
 3. validate the augmentation against strong numerical and training-stability
    gates;
 4. only then talk about benchmarking.
+
+This remains true on 2026-03-18. The repo can now import the supported
+baseline tensor subset into `KimiAttnResModel`, but that is still a research
+bootstrap with locally initialized AttnRes operators, not a meaningful
+real-model AttnRes evaluation.
 
 ### 3. Kimi K2 is out of initial scope
 
@@ -224,6 +258,25 @@ Exit criteria:
   architecture-overhead benchmarks, and quality benchmarks;
 - no claims are made beyond what was actually run;
 - failure conditions are documented and treated as legitimate outcomes.
+
+## Current Critical Gap
+
+The immediate blocker to a meaningful real-model test is now not basic Kimi
+structure. That part exists.
+
+The immediate blocker is external correctness validation:
+
+- run the public Hugging Face Kimi reference on selected real checkpoint slices;
+- compare one MLA layer, one KDA layer, final norm, and LM head against the
+  local baseline implementation;
+- verify stateful decode parity on those slices.
+
+After that, the remaining AttnRes-specific blocker is training:
+
+- baseline Kimi weights are not an AttnRes checkpoint;
+- zero-initialized pseudo-queries do not preserve standard residual behavior;
+- meaningful AttnRes-on-real-model claims therefore still require continued
+  pretraining or fresh training plus stability checks.
 
 ## Hard Truths And Risks
 

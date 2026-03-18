@@ -38,6 +38,12 @@ inputs. It is **not yet suitable** for production inference services,
 checkpoint interchange with PyTorch ecosystems, or GPU-backed deployments that
 require validated performance and operational guarantees.
 
+For the Kimi real-model milestone specifically, see
+[docs/status/kimi-real-model-status.md](docs/status/kimi-real-model-status.md).
+As of March 18, 2026, the repo is structurally ready for public-checkpoint
+baseline correctness work, but it has not yet crossed the bar for a meaningful
+real-model AttnRes result.
+
 Known limitations:
 
 - CI exercises the NdArray backend; GPU backends compile via burn but are not
@@ -245,6 +251,9 @@ support" claim.
 
 See [docs/rfcs/0001-real-model-milestone-scope.md](docs/rfcs/0001-real-model-milestone-scope.md)
 for the accepted sequencing and scope boundaries.
+See [docs/status/kimi-real-model-status.md](docs/status/kimi-real-model-status.md)
+for the current milestone status and the concrete remaining blockers before a
+meaningful real-model AttnRes test.
 
 ## Examples And Demos
 
