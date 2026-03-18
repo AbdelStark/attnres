@@ -27,7 +27,10 @@ What is now implemented in this checkout:
   both model families;
 - local deterministic Gate 1 baseline parity on a tiny-random Kimi-style
   fixture;
-- local Gate 2 baseline and AttnRes payload-loading preparation slices.
+- local Gate 2 baseline and AttnRes payload-loading preparation slices;
+- a local external baseline slice-reference path that now accepts
+  attnres-emitted hidden-only slice manifests in addition to full
+  logits-plus-hidden fixtures on the supported local surface.
 
 What is still missing for a meaningful real-model result:
 
@@ -201,6 +204,11 @@ Kimi Linear ships as 20 shards. Import must be designed around:
 - mapping names to local modules;
 - loading lazily per shard;
 - reporting unmapped, duplicate, and mismatched tensors clearly.
+
+The local Gate 2 slice-parity contract is now strong enough to request
+hidden-state-only prefix slices without also demanding final norm and LM head
+parity. That removes one local dead end, but it does not remove the need for a
+public Hugging Face reference execution path.
 
 ### Decision 4: Validation needs a Python reference harness
 

@@ -14,8 +14,9 @@ path. RFC 0005 is now partially executable in-repo: baseline-only local Gate 1
 parity for a deterministic tiny-random Kimi-style fixture, local Gate 2
 payload-loading prep with real sharded payload bytes, baseline-only Gate 2
 external-generator request manifests plus externally generated fixture
-consumption for the supported `KimiLinearModel` subset, a narrow local
-external Python fixture-generator pilot for that handoff, Gate 4 functional
+consumption for the supported `KimiLinearModel` subset, a local external
+Python fixture-generator path for that handoff that now supports hidden-only
+prefix slices as well as full logits fixtures, Gate 4 functional
 validation, reduced-config Gate 5 numerical agreement, and reduced local
 benchmark scaffolding. Hugging Face remote-code baseline parity,
 public-checkpoint parity, AttnRes-Kimi external parity generation, and other

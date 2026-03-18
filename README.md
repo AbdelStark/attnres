@@ -109,17 +109,17 @@ Known limitations:
 - RFC 0005 now also has a narrow executed external-generator pilot for that
   handoff in `external/kimi_baseline_reference/`: a standalone Python
   reference consumes an attnres-emitted `baseline-slice-request.json` plus a
-  minimal `local-init-contract.json` marker, reconstructs the pilot's
-  deterministic Burn/NdArray local-init tensors itself from the manifest seed
-  plus artifact config, loads a local Hugging Face-style pilot artifact, and
-  writes a schema-compatible `baseline-slice-parity.json` that the existing
+  minimal `local-init-contract.json` marker, reconstructs the deterministic
+  Burn/NdArray local-init tensors itself from the manifest seed plus artifact
+  config, loads a local Hugging Face-style artifact, and writes a
+  schema-compatible `baseline-slice-parity.json` that the existing
   manifest-aware Rust consumer accepts unchanged.
-- That external-generator slice is intentionally narrow: it is exercised only
-  on a local tiny pilot artifact, a fixed one-token prompt suite, selected
-  hidden layer `[0]`, and explicit coarse tolerances recorded in the emitted
-  manifest. It does not imply in-repo Hugging Face remote-code execution,
-  public-checkpoint parity, or tight numerical agreement beyond that executed
-  pilot.
+- That external-generator slice is still intentionally local-only, but it is
+  no longer locked to one fixed pilot manifest: the current contract now
+  supports both full logits-plus-hidden fixtures and hidden-state-only prefix
+  fixtures on the supported local baseline surface. It still does not imply
+  in-repo Hugging Face remote-code execution, public-checkpoint parity, or
+  tight numerical agreement beyond the executed local artifact coverage.
 - Python/Hugging Face baseline parity work, public-checkpoint validation,
   AttnRes-Kimi external parity generation, optimized KDA kernels, training
   stability validation, and any benchmark conclusions beyond the reduced local

@@ -3,13 +3,15 @@ mod support;
 use attnres::kimi::{
     compare_baseline_slice_parity_fixture_from_dir,
     compare_baseline_slice_parity_fixture_with_manifest_from_dir, KimiAttentionLayerKind,
-    KimiBaselineSliceParityError, KimiImportError, KimiLayerModuleRef, KimiModuleRef,
+    KimiBaselineSliceParityError, KimiImportError, KimiImportSelection, KimiLayerModuleRef,
+    KimiModuleRef,
 };
 use serde_json::Value;
 use std::process::Command;
 use support::kimi_local_artifact::{TestBackend, TinyBaselinePayloadArtifactBuilder};
 use support::kimi_slice_parity::{
-    build_valid_fixture, build_valid_fixture_from_manifest, build_valid_manifest, write_fixture,
+    build_request_spec, build_valid_fixture, build_valid_fixture_from_manifest,
+    build_valid_manifest, build_valid_manifest_from_request_spec, write_fixture,
     write_fixture_value, write_manifest, write_manifest_value, write_valid_fixture,
     write_valid_manifest,
 };
@@ -69,6 +71,57 @@ fn run_positive_slice_manifest_round_trip() {
     let artifact = builder.write();
     let manifest = write_valid_manifest(artifact.path(), selection.clone(), &[0]);
     let fixture = write_valid_fixture(artifact.path(), selection, &[0]);
+    let device = Default::default();
+
+    compare_baseline_slice_parity_fixture_with_manifest_from_dir::<TestBackend, _, _, _>(
+        artifact.path(),
+        manifest.path(),
+        fixture.path(),
+        &device,
+    )
+    .unwrap();
+}
+
+#[test]
+fn kimi_rfc_0005_gate2_hidden_only_slice_fixture_round_trips_without_logits() {
+    if std::env::var_os("ATTNRES_KIMI_HIDDEN_ONLY_SLICE_CHILD").is_some() {
+        run_hidden_only_slice_round_trip();
+        return;
+    }
+
+    let status = Command::new(std::env::current_exe().unwrap())
+        .env("ATTNRES_KIMI_HIDDEN_ONLY_SLICE_CHILD", "1")
+        .arg("--exact")
+        .arg("kimi_rfc_0005_gate2_hidden_only_slice_fixture_round_trips_without_logits")
+        .arg("--test-threads=1")
+        .status()
+        .unwrap();
+    assert!(status.success());
+}
+
+fn run_hidden_only_slice_round_trip() {
+    let builder = TinyBaselinePayloadArtifactBuilder::single_layer_dense_kda();
+    let artifact = builder.write();
+    let manifest = build_valid_manifest_from_request_spec(
+        artifact.path(),
+        build_request_spec(
+            KimiImportSelection {
+                layer_indices: vec![0],
+                include_embeddings: true,
+                include_final_norm: false,
+                include_lm_head: false,
+            },
+            &[0],
+            false,
+        ),
+    );
+    let fixture_value = build_valid_fixture_from_manifest(artifact.path(), &manifest);
+    assert!(fixture_value
+        .prompt_results
+        .iter()
+        .all(|result| result.logits.is_none()));
+    let manifest = write_manifest(&manifest);
+    let fixture = write_fixture(&fixture_value);
     let device = Default::default();
 
     compare_baseline_slice_parity_fixture_with_manifest_from_dir::<TestBackend, _, _, _>(
@@ -235,6 +288,43 @@ fn kimi_rfc_0005_gate2_slice_manifest_rejects_hidden_layers_outside_import_selec
 }
 
 #[test]
+fn kimi_rfc_0005_gate2_slice_manifest_rejects_hidden_only_mode_without_hidden_layers() {
+    let builder = TinyBaselinePayloadArtifactBuilder::single_layer_dense_kda();
+    let artifact = builder.write();
+    let selection = KimiImportSelection {
+        layer_indices: vec![0],
+        include_embeddings: true,
+        include_final_norm: false,
+        include_lm_head: false,
+    };
+    let valid_manifest = build_valid_manifest_from_request_spec(
+        artifact.path(),
+        build_request_spec(selection.clone(), &[0], false),
+    );
+    let fixture = write_fixture(&build_valid_fixture_from_manifest(
+        artifact.path(),
+        &valid_manifest,
+    ));
+    let mut manifest = valid_manifest;
+    manifest.slice.selected_hidden_layers.clear();
+    let manifest = write_manifest(&manifest);
+    let device = Default::default();
+
+    let err = compare_baseline_slice_parity_fixture_with_manifest_from_dir::<TestBackend, _, _, _>(
+        artifact.path(),
+        manifest.path(),
+        fixture.path(),
+        &device,
+    )
+    .unwrap_err();
+
+    assert!(matches!(
+        err,
+        KimiBaselineSliceParityError::CompareLogitsDisabledWithoutHiddenStates
+    ));
+}
+
+#[test]
 fn kimi_rfc_0005_gate2_slice_manifest_rejects_duplicate_selected_hidden_layers() {
     let builder = TinyBaselinePayloadArtifactBuilder::new();
     let selection = builder.full_selection();
@@ -311,6 +401,48 @@ fn kimi_rfc_0005_gate2_slice_parity_rejects_prompt_token_mismatch() {
             actual,
             ..
         } if prompt_name == "ascending_len4" && actual == vec![9, 9, 9, 9]
+    ));
+}
+
+#[test]
+fn kimi_rfc_0005_gate2_slice_parity_rejects_unexpected_logits_in_hidden_only_fixture() {
+    let builder = TinyBaselinePayloadArtifactBuilder::single_layer_dense_kda();
+    let artifact = builder.write();
+    let manifest = build_valid_manifest_from_request_spec(
+        artifact.path(),
+        build_request_spec(
+            KimiImportSelection {
+                layer_indices: vec![0],
+                include_embeddings: true,
+                include_final_norm: false,
+                include_lm_head: false,
+            },
+            &[0],
+            false,
+        ),
+    );
+    let mut fixture = build_valid_fixture_from_manifest(artifact.path(), &manifest);
+    fixture.prompt_results[0].logits = Some(attnres::kimi::KimiBaselineSliceParityTensor {
+        dims: vec![1, 4, 16],
+        values: vec![0.0; 64],
+    });
+    let fixture = write_fixture(&fixture);
+    let device = Default::default();
+
+    let err = compare_baseline_slice_parity_fixture_from_dir::<TestBackend, _, _>(
+        artifact.path(),
+        fixture.path(),
+        &device,
+    )
+    .unwrap_err();
+
+    assert!(matches!(
+        err,
+        KimiBaselineSliceParityError::PromptLogitsPresenceMismatch {
+            prompt_name,
+            expected_present,
+            actual_present,
+        } if prompt_name == "ascending_len4" && !expected_present && actual_present
     ));
 }
 

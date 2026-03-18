@@ -21,6 +21,10 @@ pub const KIMI_BASELINE_SLICE_PARITY_VERSION: u32 = 1;
 const KIMI_BASELINE_SLICE_TOLERANCE_METRIC: &str = "max_abs_diff";
 const KIMI_BASELINE_SLICE_RUNTIME_DTYPE: &str = "float32";
 
+fn default_compare_logits() -> bool {
+    true
+}
+
 /// Machine-readable tensor payload for baseline-only slice parity fixtures.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct KimiBaselineSliceParityTensor {
@@ -48,6 +52,8 @@ pub struct KimiBaselineSliceRequestSpec {
     pub seed: u64,
     pub import_selection: KimiImportSelection,
     pub selected_hidden_layers: Vec<usize>,
+    #[serde(default = "default_compare_logits")]
+    pub compare_logits: bool,
     pub prompts: Vec<KimiBaselineSliceParityPromptSpec>,
     pub tolerances: KimiBaselineSliceParityToleranceSpec,
 }
@@ -57,7 +63,8 @@ pub struct KimiBaselineSliceRequestSpec {
 pub struct KimiBaselineSliceParityPromptResult {
     pub prompt_name: String,
     pub input_ids: Vec<usize>,
-    pub logits: KimiBaselineSliceParityTensor,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub logits: Option<KimiBaselineSliceParityTensor>,
     pub hidden_states: Vec<KimiBaselineSliceParityHiddenState>,
 }
 
@@ -85,6 +92,8 @@ pub struct KimiBaselineSliceParityToleranceSpec {
 pub struct KimiBaselineSliceParitySliceSpec {
     pub import_selection: KimiImportSelection,
     pub selected_hidden_layers: Vec<usize>,
+    #[serde(default = "default_compare_logits")]
+    pub compare_logits: bool,
     pub requested_modules: Vec<KimiModuleRef>,
     pub required_tensors: Vec<String>,
     pub tolerances: KimiBaselineSliceParityToleranceSpec,
@@ -191,6 +200,7 @@ pub enum KimiBaselineSliceParityError {
         field: String,
         value: f32,
     },
+    CompareLogitsDisabledWithoutHiddenStates,
     PromptCountMismatch {
         expected: usize,
         actual: usize,
@@ -204,6 +214,11 @@ pub enum KimiBaselineSliceParityError {
         prompt_name: String,
         expected: Vec<usize>,
         actual: Vec<usize>,
+    },
+    PromptLogitsPresenceMismatch {
+        prompt_name: String,
+        expected_present: bool,
+        actual_present: bool,
     },
     HiddenStateCountMismatch {
         prompt_name: String,
@@ -333,6 +348,10 @@ impl Display for KimiBaselineSliceParityError {
                 f,
                 "fixture tolerance field '{field}' must be finite and >= 0, got {value}"
             ),
+            Self::CompareLogitsDisabledWithoutHiddenStates => write!(
+                f,
+                "baseline slice request must capture at least one hidden layer when compare_logits = false"
+            ),
             Self::PromptCountMismatch { expected, actual } => write!(
                 f,
                 "fixture prompt count mismatch: expected {expected} prompt results, got {actual}"
@@ -353,6 +372,14 @@ impl Display for KimiBaselineSliceParityError {
                 f,
                 "fixture prompt '{prompt_name}' token mismatch: expected {:?}, got {:?}",
                 expected, actual
+            ),
+            Self::PromptLogitsPresenceMismatch {
+                prompt_name,
+                expected_present,
+                actual_present,
+            } => write!(
+                f,
+                "fixture prompt '{prompt_name}' logits presence mismatch: expected present={expected_present}, got present={actual_present}"
             ),
             Self::HiddenStateCountMismatch {
                 prompt_name,
@@ -455,6 +482,9 @@ impl KimiBaselineSliceRequestSpec {
             &self.import_selection,
             &self.selected_hidden_layers,
         )?;
+        if !self.compare_logits && self.selected_hidden_layers.is_empty() {
+            return Err(KimiBaselineSliceParityError::CompareLogitsDisabledWithoutHiddenStates);
+        }
         Ok(())
     }
 }
@@ -479,6 +509,7 @@ impl KimiArtifactUnderstanding {
             slice: KimiBaselineSliceParitySliceSpec {
                 import_selection: request.import_selection,
                 selected_hidden_layers: request.selected_hidden_layers,
+                compare_logits: request.compare_logits,
                 requested_modules,
                 required_tensors,
                 tolerances: request.tolerances,
@@ -536,6 +567,7 @@ impl KimiBaselineSliceRequestManifest {
             seed: self.seed,
             import_selection: self.slice.import_selection.clone(),
             selected_hidden_layers: self.slice.selected_hidden_layers.clone(),
+            compare_logits: self.slice.compare_logits,
             prompts: self.prompts.clone(),
             tolerances: self.slice.tolerances.clone(),
         }
@@ -696,6 +728,11 @@ impl KimiBaselineSliceParityFixture {
             &manifest.slice.selected_hidden_layers,
         )?;
         compare_fixture_manifest_field(
+            "slice.compare_logits",
+            &self.slice.compare_logits,
+            &manifest.slice.compare_logits,
+        )?;
+        compare_fixture_manifest_field(
             "slice.requested_modules",
             &self.slice.requested_modules,
             &manifest.slice.requested_modules,
@@ -774,6 +811,15 @@ impl KimiBaselineSliceParityFixture {
                     prompt_name: prompt.name.clone(),
                     expected: prompt.input_ids.clone(),
                     actual: result.input_ids.clone(),
+                });
+            }
+            let expected_logits_present = self.slice.compare_logits;
+            let actual_logits_present = result.logits.is_some();
+            if expected_logits_present != actual_logits_present {
+                return Err(KimiBaselineSliceParityError::PromptLogitsPresenceMismatch {
+                    prompt_name: prompt.name.clone(),
+                    expected_present: expected_logits_present,
+                    actual_present: actual_logits_present,
                 });
             }
             if result.hidden_states.len() != self.slice.selected_hidden_layers.len() {
@@ -1086,19 +1132,25 @@ fn compare_model_to_fixture<B: Backend>(
 ) -> Result<(), KimiBaselineSliceParityError> {
     for (prompt, expected) in fixture.prompts.iter().zip(fixture.prompt_results.iter()) {
         let input_ids = baseline_slice_input_ids::<B>(&prompt.input_ids, device);
-        let observed_logits = tensor_to_parity(model.forward(input_ids.clone()));
-        assert_tensor_shape(
-            &format!("prompt '{}' logits", prompt.name),
-            &expected.logits,
-            &observed_logits,
-        )?;
-        let logits_diff = max_abs_diff(&expected.logits, &observed_logits);
-        if logits_diff > fixture.slice.tolerances.logits_max_abs_diff {
-            return Err(KimiBaselineSliceParityError::LogitsToleranceExceeded {
-                prompt_name: prompt.name.clone(),
-                max_abs_diff: logits_diff,
-                tolerance: fixture.slice.tolerances.logits_max_abs_diff,
-            });
+        if fixture.slice.compare_logits {
+            let observed_logits = tensor_to_parity(model.forward(input_ids.clone()));
+            let expected_logits = expected
+                .logits
+                .as_ref()
+                .expect("fixture validation must require logits when compare_logits = true");
+            assert_tensor_shape(
+                &format!("prompt '{}' logits", prompt.name),
+                expected_logits,
+                &observed_logits,
+            )?;
+            let logits_diff = max_abs_diff(expected_logits, &observed_logits);
+            if logits_diff > fixture.slice.tolerances.logits_max_abs_diff {
+                return Err(KimiBaselineSliceParityError::LogitsToleranceExceeded {
+                    prompt_name: prompt.name.clone(),
+                    max_abs_diff: logits_diff,
+                    tolerance: fixture.slice.tolerances.logits_max_abs_diff,
+                });
+            }
         }
 
         let observed_hidden_states =
@@ -1163,6 +1215,9 @@ fn trace_hidden_states<B: Backend>(
     input_ids: Tensor<B, 2, Int>,
     selected_hidden_layers: &[usize],
 ) -> Vec<KimiBaselineSliceParityHiddenState> {
+    let Some(last_selected_layer) = selected_hidden_layers.iter().copied().max() else {
+        return Vec::new();
+    };
     let mut hidden = model.embed_tokens(input_ids);
     let mut hidden_states = Vec::new();
 
@@ -1173,6 +1228,9 @@ fn trace_hidden_states<B: Backend>(
                 layer_idx,
                 tensor: tensor_to_parity(hidden.clone()),
             });
+        }
+        if layer_idx == last_selected_layer {
+            break;
         }
     }
 

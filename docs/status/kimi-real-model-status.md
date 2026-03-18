@@ -65,8 +65,10 @@ Implemented in-repo:
 - local deterministic tiny-random Gate 1 fixture-backed parity for baseline
   Kimi;
 - local Gate 2 payload-loading prep for the supported baseline tensor subset;
-- baseline-only external slice-request / slice-fixture handoff for a narrow
-  local pilot artifact.
+- baseline-only external slice-request / slice-fixture handoff for the current
+  supported local baseline surface, including hidden-state-only slices that do
+  not force final norm or LM head loading; the executed regression lock is
+  still the narrow local pilot artifact.
 
 Still missing:
 
@@ -152,6 +154,15 @@ The remaining gap is not one thing. It is two stacked blockers.
 The repository still needs an external reference harness that can execute the
 public Hugging Face Kimi implementation and return comparable slice fixtures.
 
+The local manifest/fixture contract is no longer the main blocker here:
+
+- attnres can now emit slice requests that compare selected hidden states
+  without forcing final logits;
+- the local external Python path can now consume those manifests and return
+  schema-compatible hidden-only fixtures;
+- the unchanged Rust consumer can validate those fixtures against local shard
+  loading.
+
 Without that, the project cannot answer:
 
 - Are we loading public Kimi tensors correctly?
@@ -183,7 +194,9 @@ Therefore a meaningful AttnRes real-model test still requires:
 In priority order:
 
 1. Build or harden the external Hugging Face reference harness for public
-   slice-generation on Kimi Linear 48B.
+   slice-generation on Kimi Linear 48B. The local hidden-only contract is now
+   in place, so this step is primarily about public artifacts and remote-code
+   execution rather than more local manifest plumbing.
 2. Execute Gate 2 public slice parity on at least one MLA layer, one KDA
    layer, final norm, and LM head.
 3. Execute Gate 3 end-to-end baseline smoke on suitable hardware.

@@ -48,10 +48,12 @@ The repository now executes a narrow local subset of this RFC:
   `external/kimi_baseline_reference/`: a standalone Python reference consumes
   an attnres-emitted local pilot `baseline-slice-request.json` plus a minimal
   `local-init-contract.json` marker, reconstructs the deterministic Burn/NdArray
-  local-init tensors for that fixed pilot recipe from the seed/config contract,
-  loads a local sharded artifact, and produces a schema-compatible
+  local-init tensors for the executed prefix of an attnres-emitted local slice
+  request, loads a local sharded artifact, and produces a schema-compatible
   `baseline-slice-parity.json` that passes the existing manifest-aware Rust
-  consumer unchanged.
+  consumer unchanged. That local external path now supports both
+  logits-plus-hidden fixtures and hidden-state-only fixtures when
+  `compare_logits = false`.
 - Gate 4 is executable in-repo through AttnRes-Kimi tests for dual AttnRes
   placement, mixed MLA/KDA block-state progression, embedding-block retention,
   and loud invariant-panics on corrupted internal state.
@@ -144,7 +146,8 @@ Executable repo sub-slice:
 - a narrow local external Python pilot that consumes one attnres-emitted
   request bundle plus a minimal `local-init-contract.json` marker, reconstructs
   the deterministic local-init subset externally, and returns a fixture
-  accepted by the existing consumer for that fixed recipe
+  accepted by the existing consumer for the requested local slice recipe,
+  including hidden-only prefix slices
 - local negative-path validation for missing shards, unsupported tensors,
   unsupported dtypes, tensor-shape mismatches, incomplete selected-module
   payloads, fixture kind/version drift, selected-layer mismatches,
@@ -167,10 +170,8 @@ Pass condition:
 
 Still deferred in this checkout:
 
-- general external generation of `baseline-slice-parity.json` fixtures beyond
-  the executed local pilot
 - execution of Hugging Face / Python / public-checkpoint generators inside
-  this repository beyond the local pilot bridge
+  this repository beyond the local artifact bridge
 - Hugging Face remote-code reference execution inside this repository
 - public-checkpoint payloads
 - any public-checkpoint parity claim until an external reference actually

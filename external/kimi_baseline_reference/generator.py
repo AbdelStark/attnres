@@ -19,134 +19,6 @@ LOCAL_INIT_CONTRACT_KIND = "attnres.kimi.local_init_contract"
 LOCAL_INIT_CONTRACT_VERSION = 1
 LOCAL_INIT_CONTRACT_STRATEGY = "burn.ndarray.lazy_linear_kaiming_uniform.v1"
 
-EXPECTED_MANIFEST: dict[str, Any] = {
-    "kind": BASELINE_SLICE_REQUEST_KIND,
-    "version": BASELINE_SLICE_REQUEST_VERSION,
-    "seed": 20260318,
-    "artifact": {
-        "model_type": "kimi_linear",
-        "dtype": "float32",
-        "num_hidden_layers": 2,
-        "hidden_size": 8,
-        "vocab_size": 16,
-    },
-    "slice": {
-        "import_selection": {
-            "layer_indices": [0, 1],
-            "include_embeddings": True,
-            "include_final_norm": True,
-            "include_lm_head": True,
-        },
-        "selected_hidden_layers": [0],
-        "requested_modules": [
-            "Embeddings",
-            {"DecoderLayer": {"layer_idx": 0, "component": "InputNorm"}},
-            {
-                "DecoderLayer": {
-                    "layer_idx": 0,
-                    "component": {"Attention": {"kind": "LinearAttentionKda"}},
-                }
-            },
-            {"DecoderLayer": {"layer_idx": 0, "component": "PostAttentionNorm"}},
-            {
-                "DecoderLayer": {
-                    "layer_idx": 0,
-                    "component": {"FeedForward": {"kind": "DenseMlp"}},
-                }
-            },
-            {"DecoderLayer": {"layer_idx": 1, "component": "InputNorm"}},
-            {
-                "DecoderLayer": {
-                    "layer_idx": 1,
-                    "component": {"Attention": {"kind": "FullAttention"}},
-                }
-            },
-            {"DecoderLayer": {"layer_idx": 1, "component": "PostAttentionNorm"}},
-            {
-                "DecoderLayer": {
-                    "layer_idx": 1,
-                    "component": {"FeedForward": {"kind": "SparseMoe"}},
-                }
-            },
-            "FinalNorm",
-            "LmHead",
-        ],
-        "required_tensors": [
-            "model.embed_tokens.weight",
-            "model.layers.0.input_layernorm.weight",
-            "model.layers.0.self_attn.q_proj.weight",
-            "model.layers.0.self_attn.k_proj.weight",
-            "model.layers.0.self_attn.v_proj.weight",
-            "model.layers.0.self_attn.o_proj.weight",
-            "model.layers.0.post_attention_layernorm.weight",
-            "model.layers.0.mlp.gate_proj.weight",
-            "model.layers.0.mlp.up_proj.weight",
-            "model.layers.0.mlp.down_proj.weight",
-            "model.layers.1.input_layernorm.weight",
-            "model.layers.1.self_attn.q_proj.weight",
-            "model.layers.1.self_attn.o_proj.weight",
-            "model.layers.1.post_attention_layernorm.weight",
-            "model.layers.1.block_sparse_moe.gate.weight",
-            "model.layers.1.block_sparse_moe.shared_experts.gate_proj.weight",
-            "model.layers.1.block_sparse_moe.shared_experts.up_proj.weight",
-            "model.layers.1.block_sparse_moe.shared_experts.down_proj.weight",
-            "model.layers.1.block_sparse_moe.experts.0.w1.weight",
-            "model.layers.1.block_sparse_moe.experts.0.w2.weight",
-            "model.layers.1.block_sparse_moe.experts.0.w3.weight",
-            "model.layers.1.block_sparse_moe.experts.1.w1.weight",
-            "model.layers.1.block_sparse_moe.experts.1.w2.weight",
-            "model.layers.1.block_sparse_moe.experts.1.w3.weight",
-            "model.norm.weight",
-            "lm_head.weight",
-        ],
-        "tolerances": {
-            "metric": "max_abs_diff",
-            "runtime_dtype": "float32",
-            "logits_max_abs_diff": 0.5,
-            "hidden_state_max_abs_diff": 1.0,
-        },
-    },
-    "prompts": [
-        {"name": "single_token_0", "input_ids": [0]},
-        {"name": "single_token_5", "input_ids": [5]},
-    ],
-}
-
-EXPECTED_ARTIFACT_CONFIG: dict[str, Any] = {
-    "model_type": "kimi_linear",
-    "dtype": "float32",
-    "vocab_size": 16,
-    "hidden_size": 8,
-    "intermediate_size": 16,
-    "moe_intermediate_size": 12,
-    "num_hidden_layers": 2,
-    "num_attention_heads": 2,
-    "num_key_value_heads": 1,
-    "head_dim": 4,
-    "kv_lora_rank": 4,
-    "q_lora_rank": None,
-    "qk_nope_head_dim": 2,
-    "qk_rope_head_dim": 2,
-    "v_head_dim": 4,
-    "mla_use_nope": True,
-    "hidden_act": "silu",
-    "first_k_dense_replace": 1,
-    "moe_layer_freq": 1,
-    "num_experts": 2,
-    "num_experts_per_token": 1,
-    "num_shared_experts": 1,
-    "tie_word_embeddings": False,
-    "use_cache": True,
-    "rms_norm_eps": 1e-5,
-    "linear_attn_config": {
-        "full_attn_layers": [2],
-        "kda_layers": [1],
-        "num_heads": 2,
-        "head_dim": 4,
-        "short_conv_kernel_size": 3,
-    },
-}
-
 EXPECTED_LOCAL_INIT_CONTRACT: dict[str, Any] = {
     "kind": LOCAL_INIT_CONTRACT_KIND,
     "version": LOCAL_INIT_CONTRACT_VERSION,
@@ -154,7 +26,9 @@ EXPECTED_LOCAL_INIT_CONTRACT: dict[str, Any] = {
 }
 
 # Stable float32-byte digest of the executed pilot local-init tensor set. This
-# is used by the Python tests to verify exact deterministic reconstruction.
+# remains useful as a regression lock for the original fixed bundle, even
+# though the manifest validator now accepts a broader set of attnres-emitted
+# request manifests on the same supported surface.
 PILOT_LOCAL_INIT_FLOAT32_DIGEST = "2791fc6202eb306e30b9ce2923c08d697300a8e87ebdd60ea679ce0f5bba248c"
 
 _MASK32 = 0xFFFFFFFF
@@ -180,7 +54,7 @@ def generate_fixture(
     local_init_contract_path: Path,
 ) -> dict[str, Any]:
     manifest = _load_json(manifest_path)
-    _validate_manifest(manifest)
+    compare_logits = _validate_manifest(manifest)
 
     local_init_contract = _load_json(local_init_contract_path)
     _validate_local_init_contract(local_init_contract)
@@ -188,6 +62,7 @@ def generate_fixture(
     config = _load_json(artifact_dir / "config.json")
     index = _load_json(artifact_dir / "model.safetensors.index.json")
     _validate_artifact_config(config)
+    _validate_manifest_artifact_matches_config(manifest["artifact"], config)
     _validate_required_tensors(index, manifest["slice"]["required_tensors"])
 
     tensors = _load_required_tensors(artifact_dir, index, manifest["slice"]["required_tensors"])
@@ -196,6 +71,8 @@ def generate_fixture(
             config=config,
             seed=manifest["seed"],
             required_tensors=manifest["slice"]["required_tensors"],
+            selected_hidden_layers=manifest["slice"]["selected_hidden_layers"],
+            compare_logits=compare_logits,
         )
     )
 
@@ -207,6 +84,7 @@ def generate_fixture(
                 prompt["name"],
                 prompt["input_ids"],
                 manifest["slice"]["selected_hidden_layers"],
+                compare_logits=compare_logits,
             )
         )
 
@@ -225,12 +103,14 @@ def reconstruct_local_init_tensors(
     config: dict[str, Any],
     seed: int,
     required_tensors: list[str],
+    selected_hidden_layers: list[int],
+    compare_logits: bool,
 ) -> dict[str, np.ndarray]:
     required = set(required_tensors)
     rng = BurnNdArrayStdRng(seed)
     tensors: dict[str, np.ndarray] = {}
 
-    for spec in _local_init_linear_specs(config):
+    for spec in _local_init_linear_specs(config, selected_hidden_layers, compare_logits):
         weight_name = f"{spec.prefix}.weight"
         if weight_name not in required:
             tensors[weight_name] = _kaiming_uniform_linear_tensor(
@@ -279,20 +159,24 @@ class KimiReferenceModel:
         prompt_name: str,
         input_ids: list[int],
         selected_hidden_layers: list[int],
+        compare_logits: bool,
     ) -> dict[str, Any]:
         token_array = np.asarray(input_ids, dtype=np.int64)[None, :]
         hidden = self.embed_tokens(token_array)
         hidden_states = []
-        for layer_idx in range(self.num_hidden_layers):
+        stop_after_layer = self.num_hidden_layers - 1 if compare_logits else max(selected_hidden_layers)
+        for layer_idx in range(stop_after_layer + 1):
             hidden = self.forward_layer(layer_idx, hidden)
             if layer_idx in selected_hidden_layers:
                 hidden_states.append({"layer_idx": layer_idx, "tensor": _tensor_json(hidden)})
 
-        logits = self.linear(self.rms_norm(hidden, self.tensor("model.norm.weight")), "lm_head")
+        logits = None
+        if compare_logits:
+            logits = _tensor_json(self.linear(self.rms_norm(hidden, self.tensor("model.norm.weight")), "lm_head"))
         return {
             "prompt_name": prompt_name,
             "input_ids": input_ids,
-            "logits": _tensor_json(logits),
+            "logits": logits,
             "hidden_states": hidden_states,
         }
 
@@ -515,7 +399,9 @@ def _load_json(path: Path) -> dict[str, Any]:
         raise GeneratorError(f"failed to parse json file '{path}': {exc}") from exc
 
 
-def _validate_manifest(manifest: dict[str, Any]) -> None:
+def _validate_manifest(manifest: dict[str, Any]) -> bool:
+    _expect_exact_keys(manifest, ("kind", "version", "seed", "artifact", "slice", "prompts"), "baseline manifest")
+
     if manifest.get("kind") != BASELINE_SLICE_REQUEST_KIND:
         raise GeneratorError(
             f"expected baseline slice request manifest kind '{BASELINE_SLICE_REQUEST_KIND}', got '{manifest.get('kind')}'"
@@ -525,39 +411,14 @@ def _validate_manifest(manifest: dict[str, Any]) -> None:
             f"expected baseline slice request manifest version {BASELINE_SLICE_REQUEST_VERSION}, got {manifest.get('version')}"
         )
 
-    for field in ("seed", "artifact", "prompts"):
-        _expect_equal(field, manifest.get(field), EXPECTED_MANIFEST[field], "baseline manifest")
+    seed = manifest.get("seed")
+    if not isinstance(seed, int) or seed < 0:
+        raise GeneratorError(f"baseline manifest field 'seed' must be a non-negative integer, got {seed!r}")
 
-    _expect_equal(
-        "slice.import_selection",
-        manifest["slice"].get("import_selection"),
-        EXPECTED_MANIFEST["slice"]["import_selection"],
-        "baseline manifest",
-    )
-    _expect_equal(
-        "slice.selected_hidden_layers",
-        manifest["slice"].get("selected_hidden_layers"),
-        EXPECTED_MANIFEST["slice"]["selected_hidden_layers"],
-        "baseline manifest",
-    )
-    _expect_equal(
-        "slice.requested_modules",
-        manifest["slice"].get("requested_modules"),
-        EXPECTED_MANIFEST["slice"]["requested_modules"],
-        "baseline manifest",
-    )
-    _expect_equal(
-        "slice.required_tensors",
-        manifest["slice"].get("required_tensors"),
-        EXPECTED_MANIFEST["slice"]["required_tensors"],
-        "baseline manifest",
-    )
-    _expect_equal(
-        "slice.tolerances",
-        manifest["slice"].get("tolerances"),
-        EXPECTED_MANIFEST["slice"]["tolerances"],
-        "baseline manifest",
-    )
+    _validate_manifest_artifact(manifest.get("artifact"))
+    compare_logits = _validate_manifest_slice(manifest.get("slice"), manifest["artifact"]["num_hidden_layers"])
+    _validate_manifest_prompts(manifest.get("prompts"))
+    return compare_logits
 
 
 def _validate_local_init_contract(local_init_contract: dict[str, Any]) -> None:
@@ -571,13 +432,256 @@ def _validate_local_init_contract(local_init_contract: dict[str, Any]) -> None:
 
 
 def _validate_artifact_config(config: dict[str, Any]) -> None:
-    _expect_exact_keys(config, EXPECTED_ARTIFACT_CONFIG.keys(), "artifact config")
-    _expect_equal("linear_attn_config", config.get("linear_attn_config"), EXPECTED_ARTIFACT_CONFIG["linear_attn_config"], "artifact config")
+    required_keys = (
+        "model_type",
+        "dtype",
+        "vocab_size",
+        "hidden_size",
+        "intermediate_size",
+        "moe_intermediate_size",
+        "num_hidden_layers",
+        "num_attention_heads",
+        "num_key_value_heads",
+        "head_dim",
+        "kv_lora_rank",
+        "q_lora_rank",
+        "qk_nope_head_dim",
+        "qk_rope_head_dim",
+        "v_head_dim",
+        "mla_use_nope",
+        "hidden_act",
+        "first_k_dense_replace",
+        "moe_layer_freq",
+        "num_experts",
+        "num_experts_per_token",
+        "num_shared_experts",
+        "tie_word_embeddings",
+        "use_cache",
+        "rms_norm_eps",
+        "linear_attn_config",
+    )
+    _expect_exact_keys(config, required_keys, "artifact config")
 
-    for field, expected in EXPECTED_ARTIFACT_CONFIG.items():
-        if field == "linear_attn_config":
-            continue
-        _expect_equal(field, config.get(field), expected, "artifact config")
+    if config.get("model_type") != "kimi_linear":
+        raise GeneratorError("artifact config field 'model_type' must be 'kimi_linear'")
+    if config.get("dtype") not in ("float32", "bfloat16"):
+        raise GeneratorError("artifact config field 'dtype' must be 'float32' or 'bfloat16'")
+    if config.get("hidden_act") != "silu":
+        raise GeneratorError("artifact config field 'hidden_act' must be 'silu'")
+    if config.get("q_lora_rank") is not None:
+        raise GeneratorError("artifact config field 'q_lora_rank' must be null for the current external baseline generator")
+    if bool(config.get("tie_word_embeddings")):
+        raise GeneratorError("artifact config field 'tie_word_embeddings' must be false")
+    if config.get("num_shared_experts") not in (0, 1):
+        raise GeneratorError("artifact config field 'num_shared_experts' must be 0 or 1 for the current external baseline generator")
+
+    for field in (
+        "vocab_size",
+        "hidden_size",
+        "intermediate_size",
+        "moe_intermediate_size",
+        "num_hidden_layers",
+        "num_attention_heads",
+        "num_key_value_heads",
+        "head_dim",
+        "kv_lora_rank",
+        "qk_nope_head_dim",
+        "qk_rope_head_dim",
+        "v_head_dim",
+        "first_k_dense_replace",
+        "moe_layer_freq",
+        "num_experts",
+        "num_experts_per_token",
+    ):
+        _expect_positive_int(config.get(field), f"artifact config field '{field}'")
+
+    linear_attn = config.get("linear_attn_config")
+    if not isinstance(linear_attn, dict):
+        raise GeneratorError("artifact config field 'linear_attn_config' must be an object")
+    _expect_exact_keys(
+        linear_attn,
+        ("full_attn_layers", "kda_layers", "num_heads", "head_dim", "short_conv_kernel_size"),
+        "artifact config field 'linear_attn_config'",
+    )
+    for field in ("num_heads", "head_dim", "short_conv_kernel_size"):
+        _expect_positive_int(linear_attn.get(field), f"artifact config field 'linear_attn_config.{field}'")
+
+    full_layers = _expect_int_list(linear_attn.get("full_attn_layers"), "artifact config field 'linear_attn_config.full_attn_layers'")
+    kda_layers = _expect_int_list(linear_attn.get("kda_layers"), "artifact config field 'linear_attn_config.kda_layers'")
+    num_hidden_layers = config["num_hidden_layers"]
+    _expect_one_based_layers(full_layers, num_hidden_layers, "artifact config field 'linear_attn_config.full_attn_layers'")
+    _expect_one_based_layers(kda_layers, num_hidden_layers, "artifact config field 'linear_attn_config.kda_layers'")
+
+    covered = sorted(full_layers + kda_layers)
+    expected = list(range(1, num_hidden_layers + 1))
+    if covered != expected:
+        raise GeneratorError(
+            f"artifact config attention schedule must cover every layer exactly once, got {covered}, expected {expected}"
+        )
+
+
+def _validate_manifest_artifact_matches_config(artifact: dict[str, Any], config: dict[str, Any]) -> None:
+    for field in ("model_type", "dtype", "num_hidden_layers", "hidden_size", "vocab_size"):
+        _expect_equal(field, artifact.get(field), config.get(field), "baseline manifest artifact")
+
+
+def _validate_manifest_artifact(artifact: Any) -> None:
+    if not isinstance(artifact, dict):
+        raise GeneratorError("baseline manifest field 'artifact' must be an object")
+    _expect_exact_keys(
+        artifact,
+        ("model_type", "dtype", "num_hidden_layers", "hidden_size", "vocab_size"),
+        "baseline manifest field 'artifact'",
+    )
+    if artifact.get("model_type") != "kimi_linear":
+        raise GeneratorError("baseline manifest field 'artifact.model_type' must be 'kimi_linear'")
+    if artifact.get("dtype") not in ("float32", "bfloat16"):
+        raise GeneratorError("baseline manifest field 'artifact.dtype' must be 'float32' or 'bfloat16'")
+    for field in ("num_hidden_layers", "hidden_size", "vocab_size"):
+        _expect_positive_int(artifact.get(field), f"baseline manifest field 'artifact.{field}'")
+
+
+def _validate_manifest_slice(slice_spec: Any, num_hidden_layers: int) -> bool:
+    if not isinstance(slice_spec, dict):
+        raise GeneratorError("baseline manifest field 'slice' must be an object")
+
+    allowed_keys = {
+        "import_selection",
+        "selected_hidden_layers",
+        "compare_logits",
+        "requested_modules",
+        "required_tensors",
+        "tolerances",
+    }
+    actual_keys = set(slice_spec.keys())
+    missing_keys = sorted({"import_selection", "selected_hidden_layers", "requested_modules", "required_tensors", "tolerances"} - actual_keys)
+    extra_keys = sorted(actual_keys - allowed_keys)
+    if missing_keys or extra_keys:
+        detail = []
+        if missing_keys:
+            detail.append(f"missing keys {missing_keys}")
+        if extra_keys:
+            detail.append(f"unexpected keys {extra_keys}")
+        raise GeneratorError(f"baseline manifest field 'slice' schema mismatch: {', '.join(detail)}")
+
+    import_selection = slice_spec.get("import_selection")
+    if not isinstance(import_selection, dict):
+        raise GeneratorError("baseline manifest field 'slice.import_selection' must be an object")
+    _expect_exact_keys(
+        import_selection,
+        ("layer_indices", "include_embeddings", "include_final_norm", "include_lm_head"),
+        "baseline manifest field 'slice.import_selection'",
+    )
+    layer_indices = _expect_int_list(
+        import_selection.get("layer_indices"),
+        "baseline manifest field 'slice.import_selection.layer_indices'",
+    )
+    _expect_zero_based_layers(layer_indices, num_hidden_layers, "baseline manifest field 'slice.import_selection.layer_indices'")
+    if not bool(import_selection.get("include_embeddings")):
+        raise GeneratorError("baseline manifest field 'slice.import_selection.include_embeddings' must be true")
+
+    selected_hidden_layers = _expect_int_list(
+        slice_spec.get("selected_hidden_layers"),
+        "baseline manifest field 'slice.selected_hidden_layers'",
+    )
+    _expect_zero_based_layers(selected_hidden_layers, num_hidden_layers, "baseline manifest field 'slice.selected_hidden_layers'")
+    import_layer_set = set(layer_indices)
+    for layer_idx in selected_hidden_layers:
+        if layer_idx not in import_layer_set:
+            raise GeneratorError(
+                f"baseline manifest field 'slice.selected_hidden_layers' contains layer {layer_idx} outside import_selection.layer_indices"
+            )
+
+    compare_logits = slice_spec.get("compare_logits", True)
+    if not isinstance(compare_logits, bool):
+        raise GeneratorError("baseline manifest field 'slice.compare_logits' must be a boolean when present")
+    if not compare_logits and not selected_hidden_layers:
+        raise GeneratorError("baseline manifest field 'slice.selected_hidden_layers' must be non-empty when compare_logits = false")
+    if compare_logits and not bool(import_selection.get("include_final_norm")):
+        raise GeneratorError("baseline manifest field 'slice.import_selection.include_final_norm' must be true when compare_logits = true")
+    if compare_logits and not bool(import_selection.get("include_lm_head")):
+        raise GeneratorError("baseline manifest field 'slice.import_selection.include_lm_head' must be true when compare_logits = true")
+
+    if not isinstance(slice_spec.get("requested_modules"), list) or not slice_spec["requested_modules"]:
+        raise GeneratorError("baseline manifest field 'slice.requested_modules' must be a non-empty list")
+    if not isinstance(slice_spec.get("required_tensors"), list) or not slice_spec["required_tensors"]:
+        raise GeneratorError("baseline manifest field 'slice.required_tensors' must be a non-empty list")
+    for tensor_name in slice_spec["required_tensors"]:
+        if not isinstance(tensor_name, str) or not tensor_name:
+            raise GeneratorError("baseline manifest field 'slice.required_tensors' must contain non-empty strings")
+
+    tolerances = slice_spec.get("tolerances")
+    if not isinstance(tolerances, dict):
+        raise GeneratorError("baseline manifest field 'slice.tolerances' must be an object")
+    _expect_exact_keys(
+        tolerances,
+        ("metric", "runtime_dtype", "logits_max_abs_diff", "hidden_state_max_abs_diff"),
+        "baseline manifest field 'slice.tolerances'",
+    )
+    _expect_equal("metric", tolerances.get("metric"), "max_abs_diff", "baseline manifest field 'slice.tolerances'")
+    _expect_equal("runtime_dtype", tolerances.get("runtime_dtype"), "float32", "baseline manifest field 'slice.tolerances'")
+    for field in ("logits_max_abs_diff", "hidden_state_max_abs_diff"):
+        value = tolerances.get(field)
+        if not isinstance(value, (int, float)) or not math.isfinite(value) or value < 0:
+            raise GeneratorError(
+                f"baseline manifest field 'slice.tolerances.{field}' must be finite and >= 0, got {value!r}"
+            )
+
+    return compare_logits
+
+
+def _validate_manifest_prompts(prompts: Any) -> None:
+    if not isinstance(prompts, list) or not prompts:
+        raise GeneratorError("baseline manifest field 'prompts' must be a non-empty list")
+
+    seen_names: set[str] = set()
+    for index, prompt in enumerate(prompts):
+        if not isinstance(prompt, dict):
+            raise GeneratorError(f"baseline manifest field 'prompts[{index}]' must be an object")
+        _expect_exact_keys(prompt, ("name", "input_ids"), f"baseline manifest field 'prompts[{index}]'")
+        name = prompt.get("name")
+        if not isinstance(name, str) or not name:
+            raise GeneratorError(f"baseline manifest field 'prompts[{index}].name' must be a non-empty string")
+        if name in seen_names:
+            raise GeneratorError(f"baseline manifest field 'prompts' contains duplicate prompt name '{name}'")
+        seen_names.add(name)
+        token_ids = _expect_int_list(
+            prompt.get("input_ids"),
+            f"baseline manifest field 'prompts[{index}].input_ids'",
+            allow_duplicates=True,
+        )
+        if any(token_id < 0 for token_id in token_ids):
+            raise GeneratorError(f"baseline manifest field 'prompts[{index}].input_ids' must contain non-negative integers")
+
+
+def _expect_positive_int(value: Any, label: str) -> int:
+    if not isinstance(value, int) or value <= 0:
+        raise GeneratorError(f"{label} must be a positive integer, got {value!r}")
+    return value
+
+
+def _expect_int_list(value: Any, label: str, allow_duplicates: bool = False) -> list[int]:
+    if not isinstance(value, list) or any(not isinstance(item, int) for item in value):
+        raise GeneratorError(f"{label} must be a list of integers")
+    if not allow_duplicates and len(value) != len(set(value)):
+        raise GeneratorError(f"{label} must not contain duplicate indices")
+    return value
+
+
+def _expect_zero_based_layers(layer_indices: list[int], num_hidden_layers: int, label: str) -> None:
+    for layer_idx in layer_indices:
+        if layer_idx < 0 or layer_idx >= num_hidden_layers:
+            raise GeneratorError(
+                f"{label} contains out-of-range zero-based layer index {layer_idx} for num_hidden_layers={num_hidden_layers}"
+            )
+
+
+def _expect_one_based_layers(layer_indices: list[int], num_hidden_layers: int, label: str) -> None:
+    for layer_idx in layer_indices:
+        if layer_idx <= 0 or layer_idx > num_hidden_layers:
+            raise GeneratorError(
+                f"{label} contains out-of-range one-based layer index {layer_idx} for num_hidden_layers={num_hidden_layers}"
+            )
 
 
 def _validate_required_tensors(index: dict[str, Any], required_tensors: list[str]) -> None:
@@ -605,13 +709,18 @@ def _load_required_tensors(
     return tensors
 
 
-def _local_init_linear_specs(config: dict[str, Any]) -> list[LinearModuleSpec]:
+def _local_init_linear_specs(
+    config: dict[str, Any],
+    selected_hidden_layers: list[int],
+    compare_logits: bool,
+) -> list[LinearModuleSpec]:
     hidden = config["hidden_size"]
     linear_attn = config["linear_attn_config"]
     qk_head_dim = config["qk_nope_head_dim"] + config["qk_rope_head_dim"]
     specs: list[LinearModuleSpec] = []
+    max_layer_exclusive = config["num_hidden_layers"] if compare_logits else (max(selected_hidden_layers) + 1)
 
-    for layer_idx in range(config["num_hidden_layers"]):
+    for layer_idx in range(max_layer_exclusive):
         prefix = f"model.layers.{layer_idx}"
         if (layer_idx + 1) in linear_attn["kda_layers"]:
             kda_qk_dim = linear_attn["num_heads"] * linear_attn["head_dim"]
@@ -696,7 +805,8 @@ def _local_init_linear_specs(config: dict[str, Any]) -> list[LinearModuleSpec]:
                 ]
             )
 
-    specs.append(LinearModuleSpec("lm_head", hidden, config["vocab_size"]))
+    if compare_logits:
+        specs.append(LinearModuleSpec("lm_head", hidden, config["vocab_size"]))
     return specs
 
 

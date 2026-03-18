@@ -75,6 +75,15 @@ fn main() -> Result<(), Box<dyn Error>> {
         [_, command, artifact_dir, output_dir] if command == "emit-request-bundle" => {
             emit_request_bundle(Path::new(artifact_dir), Path::new(output_dir))?;
         }
+        [_, command, artifact_dir, request_spec_path, output_dir]
+            if command == "emit-request-bundle-from-spec" =>
+        {
+            emit_request_bundle_from_spec(
+                Path::new(artifact_dir),
+                Path::new(request_spec_path),
+                Path::new(output_dir),
+            )?;
+        }
         [_, command, artifact_dir, manifest_path, output_path]
             if command == "generate-rust-fixture" =>
         {
@@ -95,7 +104,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
         _ => {
             eprintln!(
-                "usage:\n  cargo run --example kimi_rfc_0005_external_pilot -- write-artifact <output-dir>\n  cargo run --example kimi_rfc_0005_external_pilot -- emit-request-bundle <artifact-dir> <output-dir>\n  cargo run --example kimi_rfc_0005_external_pilot -- generate-rust-fixture <artifact-dir> <manifest-path> <output-path>\n  cargo run --example kimi_rfc_0005_external_pilot -- validate-fixture <artifact-dir> <manifest-path> <fixture-path>"
+                "usage:\n  cargo run --example kimi_rfc_0005_external_pilot -- write-artifact <output-dir>\n  cargo run --example kimi_rfc_0005_external_pilot -- emit-request-bundle <artifact-dir> <output-dir>\n  cargo run --example kimi_rfc_0005_external_pilot -- emit-request-bundle-from-spec <artifact-dir> <request-spec-path> <output-dir>\n  cargo run --example kimi_rfc_0005_external_pilot -- generate-rust-fixture <artifact-dir> <manifest-path> <output-path>\n  cargo run --example kimi_rfc_0005_external_pilot -- validate-fixture <artifact-dir> <manifest-path> <fixture-path>"
             );
             std::process::exit(1);
         }
@@ -127,21 +136,36 @@ fn write_artifact(output_dir: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 fn emit_request_bundle(artifact_dir: &Path, output_dir: &Path) -> Result<(), Box<dyn Error>> {
+    let understanding = KimiArtifactUnderstanding::load_from_dir(artifact_dir)?;
+    let manifest = understanding.try_build_baseline_slice_request_manifest(fixed_request_spec())?;
+    write_request_bundle(output_dir, &manifest)
+}
+
+fn emit_request_bundle_from_spec(
+    artifact_dir: &Path,
+    request_spec_path: &Path,
+    output_dir: &Path,
+) -> Result<(), Box<dyn Error>> {
+    let understanding = KimiArtifactUnderstanding::load_from_dir(artifact_dir)?;
+    let request_spec: KimiBaselineSliceRequestSpec =
+        serde_json::from_str(&fs::read_to_string(request_spec_path)?)?;
+    let manifest = understanding.try_build_baseline_slice_request_manifest(request_spec)?;
+    write_request_bundle(output_dir, &manifest)
+}
+
+fn write_request_bundle(
+    output_dir: &Path,
+    manifest: &KimiBaselineSliceRequestManifest,
+) -> Result<(), Box<dyn Error>> {
     if output_dir.exists() {
         fs::remove_dir_all(output_dir)?;
     }
     fs::create_dir_all(output_dir)?;
-
-    let understanding = KimiArtifactUnderstanding::load_from_dir(artifact_dir)?;
-    let manifest = understanding.try_build_baseline_slice_request_manifest(fixed_request_spec())?;
     manifest.write(output_dir.join(KIMI_BASELINE_SLICE_REQUEST_FILENAME))?;
-
-    let init_contract = local_init_contract();
     fs::write(
         output_dir.join(LOCAL_INIT_CONTRACT_FILENAME),
-        serde_json::to_string_pretty(&init_contract)?,
+        serde_json::to_string_pretty(&local_init_contract())?,
     )?;
-
     Ok(())
 }
 
@@ -177,7 +201,14 @@ fn generate_rust_fixture(
     let prompt_results = manifest
         .prompts
         .iter()
-        .map(|prompt| build_prompt_result(&model, prompt, &manifest.slice.selected_hidden_layers))
+        .map(|prompt| {
+            build_prompt_result(
+                &model,
+                prompt,
+                &manifest.slice.selected_hidden_layers,
+                manifest.slice.compare_logits,
+            )
+        })
         .collect::<Vec<_>>();
     let fixture: KimiBaselineSliceParityFixture = manifest.try_into_fixture(prompt_results)?;
     fs::write(output_path, serde_json::to_string_pretty(&fixture)?)?;
@@ -189,6 +220,7 @@ fn fixed_request_spec() -> KimiBaselineSliceRequestSpec {
         seed: PILOT_SEED,
         import_selection: KimiImportSelection::full(2),
         selected_hidden_layers: vec![0],
+        compare_logits: true,
         prompts: vec![
             KimiBaselineSliceParityPromptSpec {
                 name: "single_token_0".to_string(),
@@ -229,10 +261,11 @@ fn build_prompt_result(
     model: &KimiLinearModel<BackendImpl>,
     prompt: &KimiBaselineSliceParityPromptSpec,
     selected_hidden_layers: &[usize],
+    compare_logits: bool,
 ) -> KimiBaselineSliceParityPromptResult {
     let device = Default::default();
     let input_ids = input_ids(&prompt.input_ids, &device);
-    let logits = tensor_to_fixture(model.forward(input_ids.clone()));
+    let logits = compare_logits.then(|| tensor_to_fixture(model.forward(input_ids.clone())));
     let hidden_states = trace_hidden_states(model, input_ids, selected_hidden_layers);
     KimiBaselineSliceParityPromptResult {
         prompt_name: prompt.name.clone(),
@@ -247,6 +280,9 @@ fn trace_hidden_states(
     input_ids: Tensor<BackendImpl, 2, Int>,
     selected_hidden_layers: &[usize],
 ) -> Vec<KimiBaselineSliceParityHiddenState> {
+    let Some(last_selected_layer) = selected_hidden_layers.iter().copied().max() else {
+        return Vec::new();
+    };
     let mut hidden = model.embed_tokens(input_ids);
     let mut hidden_states = Vec::new();
 
@@ -257,6 +293,9 @@ fn trace_hidden_states(
                 layer_idx,
                 tensor: tensor_to_fixture(hidden.clone()),
             });
+        }
+        if layer_idx == last_selected_layer {
+            break;
         }
     }
 

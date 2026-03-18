@@ -95,13 +95,49 @@ pub fn build_valid_manifest(
     selection: KimiImportSelection,
     selected_hidden_layers: &[usize],
 ) -> KimiBaselineSliceRequestManifest {
+    build_valid_manifest_from_request_spec(
+        artifact_dir,
+        build_request_spec(selection, selected_hidden_layers, true),
+    )
+}
+
+pub fn build_valid_manifest_from_request_spec(
+    artifact_dir: &Path,
+    request_spec: KimiBaselineSliceRequestSpec,
+) -> KimiBaselineSliceRequestManifest {
     let understanding = KimiArtifactUnderstanding::load_from_dir(artifact_dir).unwrap();
     understanding
-        .try_build_baseline_slice_request_manifest(valid_request_spec(
-            selection,
-            selected_hidden_layers,
-        ))
+        .try_build_baseline_slice_request_manifest(request_spec)
         .unwrap()
+}
+
+pub fn build_request_spec(
+    selection: KimiImportSelection,
+    selected_hidden_layers: &[usize],
+    compare_logits: bool,
+) -> KimiBaselineSliceRequestSpec {
+    KimiBaselineSliceRequestSpec {
+        seed: LOCAL_SLICE_PARITY_SEED,
+        import_selection: selection,
+        selected_hidden_layers: selected_hidden_layers.to_vec(),
+        compare_logits,
+        prompts: vec![
+            KimiBaselineSliceParityPromptSpec {
+                name: "ascending_len4".to_string(),
+                input_ids: vec![0, 1, 2, 3],
+            },
+            KimiBaselineSliceParityPromptSpec {
+                name: "repeat_len3".to_string(),
+                input_ids: vec![5, 5, 1],
+            },
+        ],
+        tolerances: KimiBaselineSliceParityToleranceSpec {
+            metric: "max_abs_diff".to_string(),
+            runtime_dtype: "float32".to_string(),
+            logits_max_abs_diff: 1e-6,
+            hidden_state_max_abs_diff: 1e-6,
+        },
+    }
 }
 
 pub fn build_valid_fixture_from_manifest(
@@ -126,6 +162,7 @@ pub fn build_valid_fixture_from_manifest(
                 &model,
                 prompt,
                 &manifest.slice.selected_hidden_layers,
+                manifest.slice.compare_logits,
                 &device,
             )
         })
@@ -168,10 +205,11 @@ fn build_prompt_result(
     model: &KimiLinearModel<TestBackend>,
     prompt: &KimiBaselineSliceParityPromptSpec,
     selected_hidden_layers: &[usize],
+    compare_logits: bool,
     device: &<TestBackend as Backend>::Device,
 ) -> KimiBaselineSliceParityPromptResult {
     let input_ids = input_ids(&prompt.input_ids, device);
-    let logits = tensor_to_fixture(model.forward(input_ids.clone()));
+    let logits = compare_logits.then(|| tensor_to_fixture(model.forward(input_ids.clone())));
     let hidden_states = trace_hidden_states(model, input_ids, selected_hidden_layers);
 
     KimiBaselineSliceParityPromptResult {
@@ -187,6 +225,9 @@ fn trace_hidden_states(
     input_ids: Tensor<TestBackend, 2, Int>,
     selected_hidden_layers: &[usize],
 ) -> Vec<KimiBaselineSliceParityHiddenState> {
+    let Some(last_selected_layer) = selected_hidden_layers.iter().copied().max() else {
+        return Vec::new();
+    };
     let mut hidden = model.embed_tokens(input_ids);
     let mut hidden_states = Vec::new();
 
@@ -197,6 +238,9 @@ fn trace_hidden_states(
                 layer_idx,
                 tensor: tensor_to_fixture(hidden.clone()),
             });
+        }
+        if layer_idx == last_selected_layer {
+            break;
         }
     }
 
@@ -210,33 +254,6 @@ fn tensor_to_fixture<const D: usize>(
     let numel = dims.iter().product::<usize>();
     let values = tensor.reshape([numel]).into_data().to_vec().unwrap();
     KimiBaselineSliceParityTensor { dims, values }
-}
-
-fn valid_request_spec(
-    selection: KimiImportSelection,
-    selected_hidden_layers: &[usize],
-) -> KimiBaselineSliceRequestSpec {
-    KimiBaselineSliceRequestSpec {
-        seed: LOCAL_SLICE_PARITY_SEED,
-        import_selection: selection,
-        selected_hidden_layers: selected_hidden_layers.to_vec(),
-        prompts: vec![
-            KimiBaselineSliceParityPromptSpec {
-                name: "ascending_len4".to_string(),
-                input_ids: vec![0, 1, 2, 3],
-            },
-            KimiBaselineSliceParityPromptSpec {
-                name: "repeat_len3".to_string(),
-                input_ids: vec![5, 5, 1],
-            },
-        ],
-        tolerances: KimiBaselineSliceParityToleranceSpec {
-            metric: "max_abs_diff".to_string(),
-            runtime_dtype: "float32".to_string(),
-            logits_max_abs_diff: 1e-6,
-            hidden_state_max_abs_diff: 1e-6,
-        },
-    }
 }
 
 fn unique_temp_dir() -> PathBuf {

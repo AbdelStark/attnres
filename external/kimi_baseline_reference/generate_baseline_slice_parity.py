@@ -9,7 +9,7 @@ from external.kimi_baseline_reference.generator import GeneratorError, generate_
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate a baseline-slice-parity.json fixture from the RFC 0005 external pilot manifest."
+        description="Generate a baseline-slice-parity.json fixture from an attnres-emitted baseline slice request manifest."
     )
     parser.add_argument("--artifact-dir", required=True, type=Path)
     parser.add_argument("--manifest-path", required=True, type=Path)
