@@ -53,17 +53,21 @@ Known limitations:
   a separate `KimiAttnResModel` / `KimiAttnResDecoderLayer` path that keeps the
   RFC 0002 MLA-vs-KDA and dense-vs-MoE sublayer schedule while inserting two
   AttnRes operations per decoder layer.
-- Baseline parity is still deferred.
-- Baseline-parity claims for Kimi and full public-checkpoint compatibility for
-  either baseline Kimi or AttnRes-Kimi are still deferred.
-- No reference-parity harness, validated public-checkpoint hot swap, or
-  optimized KDA kernels are shipped yet.
-- RFC 0005 now has an executable in-repo slice only: Gate 4 functional
-  validation, reduced-config Gate 5 hidden/logit agreement tests, and reduced
-  local benchmark scaffolding for baseline Kimi plus AttnRes-Kimi.
-- Hugging Face/Python parity work, public-checkpoint validation, training
-  stability validation, and any benchmark conclusions beyond those reduced
-  local harnesses are still deferred.
+- RFC 0005 now has an executable in-repo local Gate 1 slice for the baseline
+  path only: `fixtures/kimi/tiny-random-baseline/` plus
+  `tests/kimi_rfc_0005_gate1_tests.rs` validate a deterministic
+  `KimiLinearModel` against a committed tiny-random Kimi-style reference bundle
+  by checking logits, selected post-layer hidden states, and MLA/KDA cache
+  traces on fixed prompts.
+- That Gate 1 slice validates only what the repo can execute today: Kimi-style
+  `config.json`, shard-index coverage for the selected baseline modules, and
+  committed reference outputs from the local deterministic baseline path.
+- Python/Hugging Face baseline parity work, public-checkpoint validation,
+  tensor-payload loading, optimized KDA kernels, training stability validation,
+  and any benchmark conclusions beyond the reduced local harnesses are still
+  deferred.
+- No public-checkpoint parity claim is made for either baseline Kimi or
+  AttnRes-Kimi.
 - No compatibility promise for a stable 1.0 public API yet.
 - No dedicated formal spec document is checked into this repository today.
 
@@ -161,15 +165,21 @@ support" claim.
   as planning/reporting only: tensor locators, module coverage, unsupported
   tensor reporting, selected-layer/full shard plans, and explicit `bfloat16` to
   local-runtime dtype policy.
-- Phase C: baseline parity. Deferred.
+- Phase C: baseline parity. Partially implemented in this checkout only as a
+  local fixture-backed Gate 1 subset for the baseline `KimiLinearModel` path:
+  deterministic tiny-random Kimi-style config/index validation plus fixed-prompt
+  logits, selected hidden-state, and cache-trace checks against a committed
+  reference bundle. Python/Hugging Face execution and public-checkpoint parity
+  remain deferred.
 - Phase D: AttnRes-Kimi integration. Implemented in this checkout as execution
   scaffolding only: separate AttnRes-Kimi model/layer/state types, explicit
   cache-vs-block-state handling, sublayer-space block boundaries, and
   reduced-config two-phase equivalence coverage. Baseline parity, public
   checkpoint compatibility, and optimized kernels remain deferred.
 - Phase E: validation and benchmark scaffolding. Partially implemented in this
-  checkout for local reduced configs only: Gate 4 functional tests, reduced
-  Gate 5 numerical agreement checks, and reduced local benchmark groups. Public
+  checkout for local deterministic fixtures and reduced configs only: baseline
+  Gate 1 fixture-backed parity, Gate 4 functional tests, reduced Gate 5
+  numerical agreement checks, and reduced local benchmark groups. Public
   checkpoint parity, Python/Hugging Face reference work, training validation,
   and reportable benchmark claims remain deferred.
 

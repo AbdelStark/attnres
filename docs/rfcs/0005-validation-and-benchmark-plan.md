@@ -13,6 +13,12 @@ is to make incorrect implementations fail early and loudly.
 
 The repository now executes a narrow local subset of this RFC:
 
+- Gate 1 is executable in-repo only as a baseline-only local fixture harness:
+  `fixtures/kimi/tiny-random-baseline/` provides Kimi-style `config.json`,
+  shard-index metadata, and committed reference outputs; the test harness
+  validates selected-layer baseline coverage through RFC 0003 planning, then
+  checks deterministic `KimiLinearModel` logits, selected post-layer hidden
+  states, and cache traces on a fixed prompt suite.
 - Gate 4 is executable in-repo through AttnRes-Kimi tests for dual AttnRes
   placement, mixed MLA/KDA block-state progression, embedding-block retention,
   and loud invariant-panics on corrupted internal state.
@@ -25,7 +31,7 @@ The repository now executes a narrow local subset of this RFC:
 
 The following remain deferred and should not be implied by local results:
 
-- Gate 1 baseline parity against a Python/Hugging Face reference.
+- Python/Hugging Face execution against `tiny-random/kimi-linear` for Gate 1.
 - Gate 2 selected-layer public-checkpoint parity.
 - Gate 3 end-to-end public-checkpoint smoke.
 - Gate 6 training-stability validation.
@@ -55,14 +61,29 @@ Pass condition:
 
 ### Gate 1: Tiny-random baseline parity
 
-Target:
+Executable repo target:
+
+- `fixtures/kimi/tiny-random-baseline/`
+
+Still-deferred external target:
 
 - `tiny-random/kimi-linear`
 
 Requirements:
 
-- same token IDs into Hugging Face reference and local model
-- compare logits, selected hidden states, and cache updates
+- validate `config.json` and `model.safetensors.index.json`
+- require selected baseline modules to be fully supported by RFC 0003 coverage
+  planning
+- run the baseline `KimiLinearModel` path only
+- use deterministic seeds and a fixed prompt suite
+- compare logits, selected post-layer hidden states, and cache updates against
+  the committed local reference bundle
+
+Still deferred:
+
+- same token IDs into a Python/Hugging Face reference
+- tensor payload loading from a public artifact
+- any public-checkpoint parity claim
 
 Suggested tolerances:
 

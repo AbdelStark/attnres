@@ -9,9 +9,11 @@ execution scaffolding, RFC 0003 checkpoint-import scaffolding for shard index
 inspection, tensor coverage reporting, selected-layer/full shard planning, and
 explicit dtype policy, plus RFC 0004 AttnRes-Kimi execution scaffolding with a
 separate model/layer/state path. RFC 0005 is now partially executable in-repo:
-Gate 4 functional validation, reduced-config Gate 5 numerical agreement, and
-reduced local benchmark scaffolding. Baseline parity, public-checkpoint parity,
-and Hugging Face/Python-dependent validation still remain deferred.
+baseline-only local Gate 1 parity for a deterministic tiny-random Kimi-style
+fixture, Gate 4 functional validation, reduced-config Gate 5 numerical
+agreement, and reduced local benchmark scaffolding. Python/Hugging Face
+baseline parity, public-checkpoint parity, and other external validation still
+remain deferred.
 
 - `specs/kimi-real-model-integration.md`: top-level specification for running
   `attnres` on a real model architecture, with Kimi Linear as the first target.

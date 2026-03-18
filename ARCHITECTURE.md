@@ -104,10 +104,10 @@ completed blocks
   - Parses shard-index metadata, resolves tensor-name to shard paths, and emits
     explicit tensor-to-module coverage reports plus selected-layer/full shard
     plans.
-  - Runs local reduced-config Gate 4/5 checks plus reduced local benchmark
-    groups, but still does not provide full tensor payload loading/parity for
-    public Kimi checkpoints, baseline parity claims, Python/Hugging Face
-    reference parity, or reportable benchmark conclusions.
+  - Runs a local baseline-only Gate 1 fixture-backed parity harness plus Gate
+    4/5 checks and reduced local benchmark groups, but still does not provide
+    full tensor payload loading/parity for public Kimi checkpoints,
+    Python/Hugging Face reference parity, or reportable benchmark conclusions.
 
 ## Invariants
 
