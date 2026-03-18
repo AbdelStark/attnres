@@ -38,10 +38,12 @@ The repository now executes a narrow local subset of this RFC:
   selected post-layer hidden states with explicit tolerances.
 - Gate 2 now also has a narrow executed external-generator pilot in
   `external/kimi_baseline_reference/`: a standalone Python reference consumes
-  an attnres-emitted local pilot `baseline-slice-request.json` plus companion
-  `seeded-init-state.json`, loads a local sharded artifact, and produces a
-  schema-compatible `baseline-slice-parity.json` that passes the existing
-  manifest-aware Rust consumer unchanged for that fixed pilot recipe.
+  an attnres-emitted local pilot `baseline-slice-request.json` plus a minimal
+  `local-init-contract.json` marker, reconstructs the deterministic Burn/NdArray
+  local-init tensors for that fixed pilot recipe from the seed/config contract,
+  loads a local sharded artifact, and produces a schema-compatible
+  `baseline-slice-parity.json` that passes the existing manifest-aware Rust
+  consumer unchanged.
 - Gate 4 is executable in-repo through AttnRes-Kimi tests for dual AttnRes
   placement, mixed MLA/KDA block-state progression, embedding-block retention,
   and loud invariant-panics on corrupted internal state.
@@ -129,8 +131,9 @@ Executable repo sub-slice:
 - baseline-only external slice-fixture consumption for that same supported
   tensor subset via `baseline-slice-parity.json`
 - a narrow local external Python pilot that consumes one attnres-emitted
-  request bundle plus `seeded-init-state.json` and returns a fixture accepted
-  by the existing consumer for that fixed recipe
+  request bundle plus a minimal `local-init-contract.json` marker, reconstructs
+  the deterministic local-init subset externally, and returns a fixture
+  accepted by the existing consumer for that fixed recipe
 - local negative-path validation for missing shards, unsupported tensors,
   unsupported dtypes, tensor-shape mismatches, incomplete selected-module
   payloads, fixture kind/version drift, selected-layer mismatches,

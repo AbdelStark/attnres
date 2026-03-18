@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import struct
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -13,8 +15,9 @@ BASELINE_SLICE_REQUEST_KIND = "attnres.kimi.baseline_slice_request"
 BASELINE_SLICE_REQUEST_VERSION = 1
 BASELINE_SLICE_PARITY_KIND = "attnres.kimi.baseline_slice_parity"
 BASELINE_SLICE_PARITY_VERSION = 1
-SEEDED_INIT_STATE_KIND = "attnres.kimi.seeded_init_state"
-SEEDED_INIT_STATE_VERSION = 1
+LOCAL_INIT_CONTRACT_KIND = "attnres.kimi.local_init_contract"
+LOCAL_INIT_CONTRACT_VERSION = 1
+LOCAL_INIT_CONTRACT_STRATEGY = "burn.ndarray.lazy_linear_kaiming_uniform.v1"
 
 EXPECTED_MANIFEST: dict[str, Any] = {
     "kind": BASELINE_SLICE_REQUEST_KIND,
@@ -109,42 +112,102 @@ EXPECTED_MANIFEST: dict[str, Any] = {
     ],
 }
 
+EXPECTED_ARTIFACT_CONFIG: dict[str, Any] = {
+    "model_type": "kimi_linear",
+    "dtype": "float32",
+    "vocab_size": 16,
+    "hidden_size": 8,
+    "intermediate_size": 16,
+    "moe_intermediate_size": 12,
+    "num_hidden_layers": 2,
+    "num_attention_heads": 2,
+    "num_key_value_heads": 1,
+    "head_dim": 4,
+    "kv_lora_rank": 4,
+    "q_lora_rank": None,
+    "qk_nope_head_dim": 2,
+    "qk_rope_head_dim": 2,
+    "v_head_dim": 4,
+    "mla_use_nope": True,
+    "hidden_act": "silu",
+    "first_k_dense_replace": 1,
+    "moe_layer_freq": 1,
+    "num_experts": 2,
+    "num_experts_per_token": 1,
+    "num_shared_experts": 1,
+    "tie_word_embeddings": False,
+    "use_cache": True,
+    "rms_norm_eps": 1e-5,
+    "linear_attn_config": {
+        "full_attn_layers": [2],
+        "kda_layers": [1],
+        "num_heads": 2,
+        "head_dim": 4,
+        "short_conv_kernel_size": 3,
+    },
+}
+
+EXPECTED_LOCAL_INIT_CONTRACT: dict[str, Any] = {
+    "kind": LOCAL_INIT_CONTRACT_KIND,
+    "version": LOCAL_INIT_CONTRACT_VERSION,
+    "strategy": LOCAL_INIT_CONTRACT_STRATEGY,
+}
+
+# Stable float32-byte digest of the executed pilot local-init tensor set. This
+# is used by the Python tests to verify exact deterministic reconstruction.
+PILOT_LOCAL_INIT_FLOAT32_DIGEST = "2791fc6202eb306e30b9ce2923c08d697300a8e87ebdd60ea679ce0f5bba248c"
+
+_MASK32 = 0xFFFFFFFF
+_MASK64 = 0xFFFFFFFFFFFFFFFF
+_PCG32_MUL = 6364136223846793005
+_PCG32_INC = 11634580027462260723
+
 
 class GeneratorError(RuntimeError):
     pass
 
 
-@dataclass
-class LoadedFixtureInputs:
-    manifest: dict[str, Any]
-    config: dict[str, Any]
-    tensors: dict[str, np.ndarray]
+@dataclass(frozen=True)
+class LinearModuleSpec:
+    prefix: str
+    d_input: int
+    d_output: int
 
 
 def generate_fixture(
     artifact_dir: Path,
     manifest_path: Path,
-    seeded_init_path: Path,
+    local_init_contract_path: Path,
 ) -> dict[str, Any]:
     manifest = _load_json(manifest_path)
     _validate_manifest(manifest)
 
-    seeded_init = _load_json(seeded_init_path)
-    _validate_seeded_init(seeded_init, manifest)
+    local_init_contract = _load_json(local_init_contract_path)
+    _validate_local_init_contract(local_init_contract)
 
     config = _load_json(artifact_dir / "config.json")
     index = _load_json(artifact_dir / "model.safetensors.index.json")
     _validate_artifact_config(config)
     _validate_required_tensors(index, manifest["slice"]["required_tensors"])
 
-    tensors = _load_seeded_init_tensors(seeded_init)
-    tensors.update(_load_required_tensors(artifact_dir, index, manifest["slice"]["required_tensors"]))
+    tensors = _load_required_tensors(artifact_dir, index, manifest["slice"]["required_tensors"])
+    tensors.update(
+        reconstruct_local_init_tensors(
+            config=config,
+            seed=manifest["seed"],
+            required_tensors=manifest["slice"]["required_tensors"],
+        )
+    )
 
     reference = KimiReferenceModel(config, tensors)
     prompt_results = []
     for prompt in manifest["prompts"]:
         prompt_results.append(
-            reference.run_prompt(prompt["name"], prompt["input_ids"], manifest["slice"]["selected_hidden_layers"])
+            reference.run_prompt(
+                prompt["name"],
+                prompt["input_ids"],
+                manifest["slice"]["selected_hidden_layers"],
+            )
         )
 
     return {
@@ -156,6 +219,42 @@ def generate_fixture(
         "prompts": manifest["prompts"],
         "prompt_results": prompt_results,
     }
+
+
+def reconstruct_local_init_tensors(
+    config: dict[str, Any],
+    seed: int,
+    required_tensors: list[str],
+) -> dict[str, np.ndarray]:
+    required = set(required_tensors)
+    rng = BurnNdArrayStdRng(seed)
+    tensors: dict[str, np.ndarray] = {}
+
+    for spec in _local_init_linear_specs(config):
+        weight_name = f"{spec.prefix}.weight"
+        if weight_name not in required:
+            tensors[weight_name] = _kaiming_uniform_linear_tensor(
+                rng=rng,
+                shape=(spec.d_input, spec.d_output),
+                fan_in=spec.d_input,
+            )
+
+        tensors[f"{spec.prefix}.bias"] = _kaiming_uniform_linear_tensor(
+            rng=rng,
+            shape=(spec.d_output,),
+            fan_in=spec.d_input,
+        )
+
+    return tensors
+
+
+def local_init_tensor_float32_digest(tensors: dict[str, np.ndarray]) -> str:
+    digest = hashlib.sha256()
+    for name in sorted(tensors):
+        digest.update(name.encode("utf-8"))
+        digest.update(np.asarray(tensors[name].shape, dtype=np.uint64).tobytes())
+        digest.update(np.asarray(tensors[name], dtype=np.float32).tobytes())
+    return digest.hexdigest()
 
 
 class KimiReferenceModel:
@@ -187,12 +286,7 @@ class KimiReferenceModel:
         for layer_idx in range(self.num_hidden_layers):
             hidden = self.forward_layer(layer_idx, hidden)
             if layer_idx in selected_hidden_layers:
-                hidden_states.append(
-                    {
-                        "layer_idx": layer_idx,
-                        "tensor": _tensor_json(hidden),
-                    }
-                )
+                hidden_states.append({"layer_idx": layer_idx, "tensor": _tensor_json(hidden)})
 
         logits = self.linear(self.rms_norm(hidden, self.tensor("model.norm.weight")), "lm_head")
         return {
@@ -259,20 +353,14 @@ class KimiReferenceModel:
         prefix = f"model.layers.{layer_idx}.self_attn"
         batch, seq_len, _ = hidden.shape
 
-        q = self.linear(hidden, f"{prefix}.q_proj").reshape(
-            batch, seq_len, self.num_attention_heads, self.qk_head_dim
-        )
+        q = self.linear(hidden, f"{prefix}.q_proj").reshape(batch, seq_len, self.num_attention_heads, self.qk_head_dim)
         q = _f32(np.swapaxes(self.apply_nope_policy(q), 1, 2))
 
         kv_latent = self.linear(hidden, f"{prefix}.kv_down")
-        k = self.linear(kv_latent, f"{prefix}.k_up").reshape(
-            batch, seq_len, self.num_key_value_heads, self.qk_head_dim
-        )
+        k = self.linear(kv_latent, f"{prefix}.k_up").reshape(batch, seq_len, self.num_key_value_heads, self.qk_head_dim)
         k = _f32(np.swapaxes(self.apply_nope_policy(k), 1, 2))
 
-        v = self.linear(kv_latent, f"{prefix}.v_up").reshape(
-            batch, seq_len, self.num_key_value_heads, self.v_head_dim
-        )
+        v = self.linear(kv_latent, f"{prefix}.v_up").reshape(batch, seq_len, self.num_key_value_heads, self.v_head_dim)
         v = _f32(np.swapaxes(v, 1, 2))
 
         k = self.expand_kv_heads(k)
@@ -282,12 +370,13 @@ class KimiReferenceModel:
         scores = _f32(scores + self.causal_mask(seq_len))
         weights = _softmax(scores, axis=3)
         attended = np.matmul(weights, v)
-        attended = _f32(np.swapaxes(attended, 1, 2).reshape(batch, seq_len, self.num_attention_heads * self.v_head_dim))
+        attended = _f32(
+            np.swapaxes(attended, 1, 2).reshape(batch, seq_len, self.num_attention_heads * self.v_head_dim)
+        )
         return self.linear(attended, f"{prefix}.o_proj")
 
     def forward_dense_mlp(self, layer_idx: int, hidden: np.ndarray) -> np.ndarray:
-        prefix = f"model.layers.{layer_idx}.mlp"
-        return self.forward_mlp_expert(prefix, hidden)
+        return self.forward_mlp_expert(f"model.layers.{layer_idx}.mlp", hidden)
 
     def forward_sparse_moe(self, layer_idx: int, hidden: np.ndarray) -> np.ndarray:
         prefix = f"model.layers.{layer_idx}.block_sparse_moe"
@@ -317,7 +406,7 @@ class KimiReferenceModel:
         return _f32(output)
 
     def forward_mlp_expert(self, prefix: str, hidden: np.ndarray) -> np.ndarray:
-        if prefix.endswith(".experts.0") or prefix.endswith(".experts.1"):
+        if ".experts." in prefix:
             gate = _silu(self.linear(hidden, f"{prefix}.w1"))
             up = self.linear(hidden, f"{prefix}.w3")
             return self.linear(_f32(gate * up), f"{prefix}.w2")
@@ -366,7 +455,7 @@ class KimiReferenceModel:
 
     def tensor(self, name: str) -> np.ndarray:
         if name not in self.tensors:
-            raise GeneratorError(f"missing tensor '{name}' in the seeded-init/reference state")
+            raise GeneratorError(f"missing tensor '{name}' in the reconstructed/reference state")
         return self.tensors[name]
 
     def is_kda_layer(self, layer_idx: int) -> bool:
@@ -374,6 +463,42 @@ class KimiReferenceModel:
 
     def is_sparse_moe_layer(self, layer_idx: int) -> bool:
         return layer_idx >= self.config["first_k_dense_replace"] and layer_idx % self.config["moe_layer_freq"] == 0
+
+
+class BurnNdArrayStdRng:
+    def __init__(self, seed: int) -> None:
+        self._key_words = self._expand_seed(seed)
+        self._block_counter = 0
+        self._buffer: list[int] = []
+        self._index = 64
+
+    def next_u32(self) -> int:
+        if self._index >= len(self._buffer):
+            self._refill()
+        value = self._buffer[self._index]
+        self._index += 1
+        return value
+
+    def _refill(self) -> None:
+        self._buffer = []
+        for offset in range(4):
+            self._buffer.extend(_chacha12_block(self._key_words, self._block_counter + offset))
+        self._block_counter += 4
+        self._index = 0
+
+    @staticmethod
+    def _expand_seed(seed: int) -> list[int]:
+        state = seed & _MASK64
+        seed_bytes = bytearray()
+
+        for _ in range(8):
+            state = (state * _PCG32_MUL + _PCG32_INC) & _MASK64
+            xorshifted = (((state >> 18) ^ state) >> 27) & _MASK32
+            rotation = (state >> 59) & 31
+            word = ((xorshifted >> rotation) | ((xorshifted << ((-rotation) & 31)) & _MASK32)) & _MASK32
+            seed_bytes.extend(word.to_bytes(4, "little"))
+
+        return [int.from_bytes(seed_bytes[idx : idx + 4], "little") for idx in range(0, 32, 4)]
 
 
 def write_fixture(output_path: Path, fixture: dict[str, Any]) -> None:
@@ -435,48 +560,33 @@ def _validate_manifest(manifest: dict[str, Any]) -> None:
     )
 
 
-def _validate_seeded_init(seeded_init: dict[str, Any], manifest: dict[str, Any]) -> None:
-    if seeded_init.get("kind") != SEEDED_INIT_STATE_KIND:
-        raise GeneratorError(
-            f"expected seeded init state kind '{SEEDED_INIT_STATE_KIND}', got '{seeded_init.get('kind')}'"
-        )
-    if seeded_init.get("version") != SEEDED_INIT_STATE_VERSION:
-        raise GeneratorError(
-            f"expected seeded init state version {SEEDED_INIT_STATE_VERSION}, got {seeded_init.get('version')}"
-        )
-    _expect_equal("seed", seeded_init.get("seed"), manifest["seed"], "seeded init state")
-    _expect_equal("artifact", seeded_init.get("artifact"), manifest["artifact"], "seeded init state")
+def _validate_local_init_contract(local_init_contract: dict[str, Any]) -> None:
+    _expect_exact_keys(
+        local_init_contract,
+        EXPECTED_LOCAL_INIT_CONTRACT.keys(),
+        "local init contract",
+    )
+    for field, expected in EXPECTED_LOCAL_INIT_CONTRACT.items():
+        _expect_equal(field, local_init_contract.get(field), expected, "local init contract")
 
 
 def _validate_artifact_config(config: dict[str, Any]) -> None:
-    _expect_equal("model_type", config.get("model_type"), EXPECTED_MANIFEST["artifact"]["model_type"], "artifact config")
-    _expect_equal("dtype", config.get("dtype"), EXPECTED_MANIFEST["artifact"]["dtype"], "artifact config")
-    _expect_equal(
-        "num_hidden_layers",
-        config.get("num_hidden_layers"),
-        EXPECTED_MANIFEST["artifact"]["num_hidden_layers"],
-        "artifact config",
-    )
-    _expect_equal("hidden_size", config.get("hidden_size"), EXPECTED_MANIFEST["artifact"]["hidden_size"], "artifact config")
-    _expect_equal("vocab_size", config.get("vocab_size"), EXPECTED_MANIFEST["artifact"]["vocab_size"], "artifact config")
+    _expect_exact_keys(config, EXPECTED_ARTIFACT_CONFIG.keys(), "artifact config")
+    _expect_equal("linear_attn_config", config.get("linear_attn_config"), EXPECTED_ARTIFACT_CONFIG["linear_attn_config"], "artifact config")
+
+    for field, expected in EXPECTED_ARTIFACT_CONFIG.items():
+        if field == "linear_attn_config":
+            continue
+        _expect_equal(field, config.get(field), expected, "artifact config")
 
 
 def _validate_required_tensors(index: dict[str, Any], required_tensors: list[str]) -> None:
     weight_map = index.get("weight_map")
     if not isinstance(weight_map, dict):
         raise GeneratorError("artifact shard index is missing 'weight_map'")
-    actual = [tensor_name for tensor_name in required_tensors if tensor_name not in weight_map]
-    if actual:
-        raise GeneratorError(f"artifact shard index is missing required tensors: {actual}")
-
-
-def _load_seeded_init_tensors(seeded_init: dict[str, Any]) -> dict[str, np.ndarray]:
-    tensors = {}
-    for name, payload in seeded_init["tensors"].items():
-        dims = payload["dims"]
-        values = np.asarray(payload["values"], dtype=np.float32)
-        tensors[name] = values.reshape(dims)
-    return tensors
+    missing = [tensor_name for tensor_name in required_tensors if tensor_name not in weight_map]
+    if missing:
+        raise GeneratorError(f"artifact shard index is missing required tensors: {missing}")
 
 
 def _load_required_tensors(
@@ -495,6 +605,173 @@ def _load_required_tensors(
     return tensors
 
 
+def _local_init_linear_specs(config: dict[str, Any]) -> list[LinearModuleSpec]:
+    hidden = config["hidden_size"]
+    linear_attn = config["linear_attn_config"]
+    qk_head_dim = config["qk_nope_head_dim"] + config["qk_rope_head_dim"]
+    specs: list[LinearModuleSpec] = []
+
+    for layer_idx in range(config["num_hidden_layers"]):
+        prefix = f"model.layers.{layer_idx}"
+        if (layer_idx + 1) in linear_attn["kda_layers"]:
+            kda_qk_dim = linear_attn["num_heads"] * linear_attn["head_dim"]
+            kda_v_dim = linear_attn["num_heads"] * config["v_head_dim"]
+            specs.extend(
+                [
+                    LinearModuleSpec(f"{prefix}.self_attn.q_proj", hidden, kda_qk_dim),
+                    LinearModuleSpec(f"{prefix}.self_attn.k_proj", hidden, kda_qk_dim),
+                    LinearModuleSpec(f"{prefix}.self_attn.v_proj", hidden, kda_v_dim),
+                    LinearModuleSpec(f"{prefix}.self_attn.o_proj", kda_v_dim, hidden),
+                ]
+            )
+        else:
+            if config["q_lora_rank"] is None:
+                specs.append(
+                    LinearModuleSpec(
+                        f"{prefix}.self_attn.q_proj",
+                        hidden,
+                        config["num_attention_heads"] * qk_head_dim,
+                    )
+                )
+            else:
+                specs.extend(
+                    [
+                        LinearModuleSpec(f"{prefix}.self_attn.q_proj.down", hidden, config["q_lora_rank"]),
+                        LinearModuleSpec(
+                            f"{prefix}.self_attn.q_proj.up",
+                            config["q_lora_rank"],
+                            config["num_attention_heads"] * qk_head_dim,
+                        ),
+                    ]
+                )
+            specs.extend(
+                [
+                    LinearModuleSpec(f"{prefix}.self_attn.kv_down", hidden, config["kv_lora_rank"]),
+                    LinearModuleSpec(
+                        f"{prefix}.self_attn.k_up",
+                        config["kv_lora_rank"],
+                        config["num_key_value_heads"] * qk_head_dim,
+                    ),
+                    LinearModuleSpec(
+                        f"{prefix}.self_attn.v_up",
+                        config["kv_lora_rank"],
+                        config["num_key_value_heads"] * config["v_head_dim"],
+                    ),
+                    LinearModuleSpec(
+                        f"{prefix}.self_attn.o_proj",
+                        config["num_attention_heads"] * config["v_head_dim"],
+                        hidden,
+                    ),
+                ]
+            )
+
+        if layer_idx >= config["first_k_dense_replace"] and layer_idx % config["moe_layer_freq"] == 0:
+            specs.append(LinearModuleSpec(f"{prefix}.block_sparse_moe.gate", hidden, config["num_experts"]))
+            for shared_idx in range(config["num_shared_experts"]):
+                if shared_idx != 0:
+                    raise GeneratorError("local-init reconstruction supports exactly one shared expert for this pilot")
+                shared_prefix = f"{prefix}.block_sparse_moe.shared_experts"
+                specs.extend(
+                    [
+                        LinearModuleSpec(f"{shared_prefix}.gate_proj", hidden, config["moe_intermediate_size"]),
+                        LinearModuleSpec(f"{shared_prefix}.up_proj", hidden, config["moe_intermediate_size"]),
+                        LinearModuleSpec(f"{shared_prefix}.down_proj", config["moe_intermediate_size"], hidden),
+                    ]
+                )
+            for expert_idx in range(config["num_experts"]):
+                expert_prefix = f"{prefix}.block_sparse_moe.experts.{expert_idx}"
+                specs.extend(
+                    [
+                        LinearModuleSpec(f"{expert_prefix}.w1", hidden, config["moe_intermediate_size"]),
+                        LinearModuleSpec(f"{expert_prefix}.w3", hidden, config["moe_intermediate_size"]),
+                        LinearModuleSpec(f"{expert_prefix}.w2", config["moe_intermediate_size"], hidden),
+                    ]
+                )
+        else:
+            specs.extend(
+                [
+                    LinearModuleSpec(f"{prefix}.mlp.gate_proj", hidden, config["intermediate_size"]),
+                    LinearModuleSpec(f"{prefix}.mlp.up_proj", hidden, config["intermediate_size"]),
+                    LinearModuleSpec(f"{prefix}.mlp.down_proj", config["intermediate_size"], hidden),
+                ]
+            )
+
+    specs.append(LinearModuleSpec("lm_head", hidden, config["vocab_size"]))
+    return specs
+
+
+def _kaiming_uniform_linear_tensor(
+    rng: BurnNdArrayStdRng,
+    shape: tuple[int, ...],
+    fan_in: int,
+) -> np.ndarray:
+    bound = 1.0 / math.sqrt(fan_in)
+    low, scale = _bounded_uniform_scale(np.float32(-bound), np.float32(bound))
+    values = [_sample_uniform_float32(rng, low, scale) for _ in range(math.prod(shape))]
+    return np.asarray(values, dtype=np.float32).reshape(shape)
+
+
+def _bounded_uniform_scale(low: np.float32, high: np.float32) -> tuple[np.float32, np.float32]:
+    scale = np.float32(high - low)
+    max_rand = np.float32(1.0 - np.finfo(np.float32).eps)
+    while np.float32(scale * max_rand + low) > high:
+        scale = np.nextafter(scale, np.float32(-np.inf), dtype=np.float32)
+    return low, scale
+
+
+def _sample_uniform_float32(
+    rng: BurnNdArrayStdRng,
+    low: np.float32,
+    scale: np.float32,
+) -> np.float32:
+    raw = rng.next_u32() >> (32 - 23)
+    value_1_2 = struct.unpack("<f", struct.pack("<I", 0x3F800000 | raw))[0]
+    value_0_1 = np.float32(value_1_2 - 1.0)
+    return np.float32(value_0_1 * scale + low)
+
+
+def _chacha12_block(key_words: list[int], block_counter: int, stream: int = 0) -> list[int]:
+    state = [
+        0x61707865,
+        0x3320646E,
+        0x79622D32,
+        0x6B206574,
+        *key_words,
+        block_counter & _MASK32,
+        (block_counter >> 32) & _MASK32,
+        stream & _MASK32,
+        (stream >> 32) & _MASK32,
+    ]
+    working = state.copy()
+
+    for _ in range(6):
+        _quarter_round(working, 0, 4, 8, 12)
+        _quarter_round(working, 1, 5, 9, 13)
+        _quarter_round(working, 2, 6, 10, 14)
+        _quarter_round(working, 3, 7, 11, 15)
+        _quarter_round(working, 0, 5, 10, 15)
+        _quarter_round(working, 1, 6, 11, 12)
+        _quarter_round(working, 2, 7, 8, 13)
+        _quarter_round(working, 3, 4, 9, 14)
+
+    return [(working[idx] + state[idx]) & _MASK32 for idx in range(16)]
+
+
+def _quarter_round(state: list[int], a: int, b: int, c: int, d: int) -> None:
+    state[a] = (state[a] + state[b]) & _MASK32
+    state[d] = _rotate_left32(state[d] ^ state[a], 16)
+    state[c] = (state[c] + state[d]) & _MASK32
+    state[b] = _rotate_left32(state[b] ^ state[c], 12)
+    state[a] = (state[a] + state[b]) & _MASK32
+    state[d] = _rotate_left32(state[d] ^ state[a], 8)
+    state[c] = (state[c] + state[d]) & _MASK32
+    state[b] = _rotate_left32(state[b] ^ state[c], 7)
+
+
+def _rotate_left32(value: int, shift: int) -> int:
+    return ((value << shift) & _MASK32) | (value >> (32 - shift))
+
+
 def _expect_equal(field: str, actual: Any, expected: Any, label: str) -> None:
     if actual != expected:
         raise GeneratorError(
@@ -502,12 +779,23 @@ def _expect_equal(field: str, actual: Any, expected: Any, label: str) -> None:
         )
 
 
+def _expect_exact_keys(payload: dict[str, Any], expected_keys, label: str) -> None:
+    expected = set(expected_keys)
+    actual = set(payload.keys())
+    missing = sorted(expected - actual)
+    extra = sorted(actual - expected)
+    if missing or extra:
+        detail = []
+        if missing:
+            detail.append(f"missing keys {missing}")
+        if extra:
+            detail.append(f"unexpected keys {extra}")
+        raise GeneratorError(f"{label} schema mismatch: {', '.join(detail)}")
+
+
 def _tensor_json(tensor: np.ndarray) -> dict[str, Any]:
     array = np.asarray(tensor, dtype=np.float32)
-    return {
-        "dims": list(array.shape),
-        "values": array.reshape(-1).tolist(),
-    }
+    return {"dims": list(array.shape), "values": array.reshape(-1).tolist()}
 
 
 def _f32(value: Any) -> np.ndarray:
@@ -519,13 +807,12 @@ def _softplus(x: np.ndarray) -> np.ndarray:
     return _f32(np.log1p(np.exp(-np.abs(array))) + np.maximum(array, np.float32(0.0)))
 
 
+def _softmax(x: np.ndarray, axis: int) -> np.ndarray:
+    shifted = _f32(x - np.max(x, axis=axis, keepdims=True))
+    exp = np.exp(shifted, dtype=np.float32)
+    return _f32(exp / np.sum(exp, axis=axis, keepdims=True, dtype=np.float32))
+
+
 def _silu(x: np.ndarray) -> np.ndarray:
     array = _f32(x)
-    return _f32(array / (np.float32(1.0) + np.exp(-array)))
-
-
-def _softmax(x: np.ndarray, axis: int) -> np.ndarray:
-    array = _f32(x)
-    shifted = _f32(array - np.max(array, axis=axis, keepdims=True))
-    exp = _f32(np.exp(shifted))
-    return _f32(exp / np.sum(exp, axis=axis, keepdims=True, dtype=np.float32))
+    return _f32(array / (np.float32(1.0) + np.exp(-array, dtype=np.float32)))

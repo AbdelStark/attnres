@@ -1,14 +1,12 @@
 use attnres::kimi::{
     compare_baseline_slice_parity_fixture_with_manifest_from_dir, KimiArtifactConfig,
-    KimiArtifactUnderstanding, KimiBaselineSliceParityArtifactSpec, KimiBaselineSliceParityFixture,
-    KimiBaselineSliceParityHiddenState, KimiBaselineSliceParityPromptResult,
-    KimiBaselineSliceParityPromptSpec, KimiBaselineSliceParityTensor,
-    KimiBaselineSliceParityToleranceSpec, KimiBaselineSliceRequestManifest,
-    KimiBaselineSliceRequestSpec, KimiImportSelection, KimiLinearModel,
-    KIMI_BASELINE_SLICE_REQUEST_FILENAME,
+    KimiArtifactUnderstanding, KimiBaselineSliceParityFixture, KimiBaselineSliceParityHiddenState,
+    KimiBaselineSliceParityPromptResult, KimiBaselineSliceParityPromptSpec,
+    KimiBaselineSliceParityTensor, KimiBaselineSliceParityToleranceSpec,
+    KimiBaselineSliceRequestManifest, KimiBaselineSliceRequestSpec, KimiImportSelection,
+    KimiLinearModel, KIMI_BASELINE_SLICE_REQUEST_FILENAME,
 };
 use burn::backend::NdArray;
-use burn::nn::LinearConfig;
 use burn::prelude::*;
 use serde::Serialize;
 use serde_json::Value;
@@ -21,9 +19,10 @@ type BackendImpl = NdArray;
 type Device = <BackendImpl as Backend>::Device;
 
 const PILOT_SEED: u64 = 20260318;
-const SEEDED_INIT_STATE_FILENAME: &str = "seeded-init-state.json";
-const SEEDED_INIT_STATE_KIND: &str = "attnres.kimi.seeded_init_state";
-const SEEDED_INIT_STATE_VERSION: u32 = 1;
+const LOCAL_INIT_CONTRACT_FILENAME: &str = "local-init-contract.json";
+const LOCAL_INIT_CONTRACT_KIND: &str = "attnres.kimi.local_init_contract";
+const LOCAL_INIT_CONTRACT_VERSION: u32 = 1;
+const LOCAL_INIT_CONTRACT_STRATEGY: &str = "burn.ndarray.lazy_linear_kaiming_uniform.v1";
 
 #[derive(Debug, Clone)]
 struct LocalSafetensorTensor {
@@ -61,12 +60,10 @@ struct TinyBaselinePayloadArtifactBuilder {
 }
 
 #[derive(Debug, Serialize)]
-struct SeededInitState {
+struct LocalInitContract {
     kind: String,
     version: u32,
-    seed: u64,
-    artifact: KimiBaselineSliceParityArtifactSpec,
-    tensors: BTreeMap<String, KimiBaselineSliceParityTensor>,
+    strategy: String,
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -139,10 +136,10 @@ fn emit_request_bundle(artifact_dir: &Path, output_dir: &Path) -> Result<(), Box
     let manifest = understanding.try_build_baseline_slice_request_manifest(fixed_request_spec())?;
     manifest.write(output_dir.join(KIMI_BASELINE_SLICE_REQUEST_FILENAME))?;
 
-    let init_state = export_seeded_init_state(&understanding.config)?;
+    let init_contract = local_init_contract();
     fs::write(
-        output_dir.join(SEEDED_INIT_STATE_FILENAME),
-        serde_json::to_string_pretty(&init_state)?,
+        output_dir.join(LOCAL_INIT_CONTRACT_FILENAME),
+        serde_json::to_string_pretty(&init_contract)?,
     )?;
 
     Ok(())
@@ -211,270 +208,12 @@ fn fixed_request_spec() -> KimiBaselineSliceRequestSpec {
     }
 }
 
-fn export_seeded_init_state(
-    config: &KimiArtifactConfig,
-) -> Result<SeededInitState, Box<dyn Error>> {
-    let device = Default::default();
-    BackendImpl::seed(&device, PILOT_SEED);
-
-    let mut tensors = BTreeMap::new();
-    export_layers(config, &device, &mut tensors)?;
-    export_linear_bias(
-        "lm_head",
-        config.hidden_size,
-        config.vocab_size,
-        &device,
-        &mut tensors,
-    );
-
-    Ok(SeededInitState {
-        kind: SEEDED_INIT_STATE_KIND.to_string(),
-        version: SEEDED_INIT_STATE_VERSION,
-        seed: PILOT_SEED,
-        artifact: KimiBaselineSliceParityArtifactSpec {
-            model_type: config.model_type.clone(),
-            dtype: config.dtype.clone(),
-            num_hidden_layers: config.num_hidden_layers,
-            hidden_size: config.hidden_size,
-            vocab_size: config.vocab_size,
-        },
-        tensors,
-    })
-}
-
-fn export_layers(
-    config: &KimiArtifactConfig,
-    device: &Device,
-    tensors: &mut BTreeMap<String, KimiBaselineSliceParityTensor>,
-) -> Result<(), Box<dyn Error>> {
-    let understanding = KimiArtifactUnderstanding::load_from_dir(fixture_dir().as_path())?;
-    let schedule = &understanding.layer_schedule;
-
-    for layer in schedule.layers() {
-        let prefix = format!("model.layers.{}", layer.layer_idx);
-
-        match layer.attention_kind {
-            attnres::kimi::KimiAttentionLayerKind::LinearAttentionKda => {
-                let qk_dim =
-                    config.linear_attn_config.num_heads * config.linear_attn_config.head_dim;
-                let value_dim = config.linear_attn_config.num_heads * config.v_head_dim;
-                export_linear_bias(
-                    &format!("{prefix}.self_attn.q_proj"),
-                    config.hidden_size,
-                    qk_dim,
-                    device,
-                    tensors,
-                );
-                export_linear_bias(
-                    &format!("{prefix}.self_attn.k_proj"),
-                    config.hidden_size,
-                    qk_dim,
-                    device,
-                    tensors,
-                );
-                export_linear_bias(
-                    &format!("{prefix}.self_attn.v_proj"),
-                    config.hidden_size,
-                    value_dim,
-                    device,
-                    tensors,
-                );
-                export_linear_bias(
-                    &format!("{prefix}.self_attn.o_proj"),
-                    value_dim,
-                    config.hidden_size,
-                    device,
-                    tensors,
-                );
-            }
-            attnres::kimi::KimiAttentionLayerKind::FullAttention => {
-                let qk_head_dim = config.qk_nope_head_dim + config.qk_rope_head_dim;
-                if let Some(q_rank) = config.q_lora_rank {
-                    export_linear_full(
-                        &format!("{prefix}.self_attn.q_proj.down"),
-                        config.hidden_size,
-                        q_rank,
-                        device,
-                        tensors,
-                    );
-                    export_linear_full(
-                        &format!("{prefix}.self_attn.q_proj.up"),
-                        q_rank,
-                        config.num_attention_heads * qk_head_dim,
-                        device,
-                        tensors,
-                    );
-                } else {
-                    export_linear_bias(
-                        &format!("{prefix}.self_attn.q_proj"),
-                        config.hidden_size,
-                        config.num_attention_heads * qk_head_dim,
-                        device,
-                        tensors,
-                    );
-                }
-                export_linear_full(
-                    &format!("{prefix}.self_attn.kv_down"),
-                    config.hidden_size,
-                    config.kv_lora_rank,
-                    device,
-                    tensors,
-                );
-                export_linear_full(
-                    &format!("{prefix}.self_attn.k_up"),
-                    config.kv_lora_rank,
-                    config.num_key_value_heads * qk_head_dim,
-                    device,
-                    tensors,
-                );
-                export_linear_full(
-                    &format!("{prefix}.self_attn.v_up"),
-                    config.kv_lora_rank,
-                    config.num_key_value_heads * config.v_head_dim,
-                    device,
-                    tensors,
-                );
-                export_linear_bias(
-                    &format!("{prefix}.self_attn.o_proj"),
-                    config.num_attention_heads * config.v_head_dim,
-                    config.hidden_size,
-                    device,
-                    tensors,
-                );
-            }
-        }
-
-        match layer.feed_forward_kind {
-            attnres::kimi::KimiFeedForwardLayerKind::DenseMlp => {
-                export_mlp_expert_biases(
-                    &format!("{prefix}.mlp"),
-                    config.hidden_size,
-                    config.intermediate_size,
-                    device,
-                    tensors,
-                );
-            }
-            attnres::kimi::KimiFeedForwardLayerKind::SparseMoe => {
-                export_linear_bias(
-                    &format!("{prefix}.block_sparse_moe.gate"),
-                    config.hidden_size,
-                    config.num_experts,
-                    device,
-                    tensors,
-                );
-                export_mlp_expert_biases(
-                    &format!("{prefix}.block_sparse_moe.shared_experts"),
-                    config.hidden_size,
-                    config.moe_intermediate_size,
-                    device,
-                    tensors,
-                );
-                for expert_idx in 0..config.num_experts {
-                    export_sparse_expert_biases(
-                        &format!("{prefix}.block_sparse_moe.experts.{expert_idx}"),
-                        config.hidden_size,
-                        config.moe_intermediate_size,
-                        device,
-                        tensors,
-                    );
-                }
-            }
-        }
+fn local_init_contract() -> LocalInitContract {
+    LocalInitContract {
+        kind: LOCAL_INIT_CONTRACT_KIND.to_string(),
+        version: LOCAL_INIT_CONTRACT_VERSION,
+        strategy: LOCAL_INIT_CONTRACT_STRATEGY.to_string(),
     }
-
-    Ok(())
-}
-
-fn export_mlp_expert_biases(
-    prefix: &str,
-    hidden_size: usize,
-    intermediate_size: usize,
-    device: &Device,
-    tensors: &mut BTreeMap<String, KimiBaselineSliceParityTensor>,
-) {
-    export_linear_bias(
-        &format!("{prefix}.gate_proj"),
-        hidden_size,
-        intermediate_size,
-        device,
-        tensors,
-    );
-    export_linear_bias(
-        &format!("{prefix}.up_proj"),
-        hidden_size,
-        intermediate_size,
-        device,
-        tensors,
-    );
-    export_linear_bias(
-        &format!("{prefix}.down_proj"),
-        intermediate_size,
-        hidden_size,
-        device,
-        tensors,
-    );
-}
-
-fn export_sparse_expert_biases(
-    prefix: &str,
-    hidden_size: usize,
-    intermediate_size: usize,
-    device: &Device,
-    tensors: &mut BTreeMap<String, KimiBaselineSliceParityTensor>,
-) {
-    export_linear_bias(
-        &format!("{prefix}.w1"),
-        hidden_size,
-        intermediate_size,
-        device,
-        tensors,
-    );
-    export_linear_bias(
-        &format!("{prefix}.w3"),
-        hidden_size,
-        intermediate_size,
-        device,
-        tensors,
-    );
-    export_linear_bias(
-        &format!("{prefix}.w2"),
-        intermediate_size,
-        hidden_size,
-        device,
-        tensors,
-    );
-}
-
-fn export_linear_full(
-    prefix: &str,
-    d_input: usize,
-    d_output: usize,
-    device: &Device,
-    tensors: &mut BTreeMap<String, KimiBaselineSliceParityTensor>,
-) {
-    let linear = LinearConfig::new(d_input, d_output).init::<BackendImpl>(device);
-    tensors.insert(
-        format!("{prefix}.weight"),
-        tensor_to_fixture(linear.weight.val()),
-    );
-    let bias = linear
-        .bias
-        .expect("default linear config should initialize a bias parameter");
-    tensors.insert(format!("{prefix}.bias"), tensor_to_fixture(bias.val()));
-}
-
-fn export_linear_bias(
-    prefix: &str,
-    d_input: usize,
-    d_output: usize,
-    device: &Device,
-    tensors: &mut BTreeMap<String, KimiBaselineSliceParityTensor>,
-) {
-    let linear = LinearConfig::new(d_input, d_output).init::<BackendImpl>(device);
-    let bias = linear
-        .bias
-        .expect("default linear config should initialize a bias parameter");
-    tensors.insert(format!("{prefix}.bias"), tensor_to_fixture(bias.val()));
 }
 
 fn tensor_to_fixture<const D: usize>(

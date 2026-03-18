@@ -96,9 +96,11 @@ Known limitations:
 - RFC 0005 now also has a narrow executed external-generator pilot for that
   handoff in `external/kimi_baseline_reference/`: a standalone Python
   reference consumes an attnres-emitted `baseline-slice-request.json` plus a
-  companion `seeded-init-state.json` bridge, loads a local Hugging Face-style
-  pilot artifact, and writes a schema-compatible `baseline-slice-parity.json`
-  that the existing manifest-aware Rust consumer accepts unchanged.
+  minimal `local-init-contract.json` marker, reconstructs the pilot's
+  deterministic Burn/NdArray local-init tensors itself from the manifest seed
+  plus artifact config, loads a local Hugging Face-style pilot artifact, and
+  writes a schema-compatible `baseline-slice-parity.json` that the existing
+  manifest-aware Rust consumer accepts unchanged.
 - That external-generator slice is intentionally narrow: it is exercised only
   on a local tiny pilot artifact, a fixed one-token prompt suite, selected
   hidden layer `[0]`, and explicit coarse tolerances recorded in the emitted

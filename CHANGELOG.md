@@ -35,10 +35,11 @@ The repository did not maintain a structured changelog before March 16, 2026.
 - A narrow RFC 0005 external-generator pilot in
   `external/kimi_baseline_reference/`, plus the
   `examples/kimi_rfc_0005_external_pilot.rs` bridge that writes a local pilot
-  artifact, emits the canonical request bundle, exports deterministic
-  `seeded-init-state.json`, validates generated fixtures through the existing
-  consumer path, and exercises explicit negative-path coverage on the Python
-  side.
+  artifact, emits the canonical request bundle plus a minimal
+  `local-init-contract.json` marker, reconstructs deterministic local-init
+  tensors on the Python side without Rust tensor payload export, validates
+  generated fixtures through the existing consumer path, and exercises
+  explicit negative-path coverage on the Python side.
 
 ### Changed
 

@@ -13,7 +13,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--artifact-dir", required=True, type=Path)
     parser.add_argument("--manifest-path", required=True, type=Path)
-    parser.add_argument("--seeded-init-path", required=True, type=Path)
+    parser.add_argument("--local-init-contract-path", required=True, type=Path)
     parser.add_argument("--output-path", required=True, type=Path)
     return parser.parse_args()
 
@@ -24,7 +24,7 @@ def main() -> int:
         fixture = generate_fixture(
             artifact_dir=args.artifact_dir,
             manifest_path=args.manifest_path,
-            seeded_init_path=args.seeded_init_path,
+            local_init_contract_path=args.local_init_contract_path,
         )
         write_fixture(args.output_path, fixture)
         return 0
@@ -35,4 +35,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
