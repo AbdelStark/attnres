@@ -74,12 +74,25 @@ Known limitations:
   artifact with real payload bytes and checks deterministic output changes plus
   explicit failures for unsupported tensors, missing shards, unsupported
   dtypes, shape mismatches, and incomplete selected-layer payload coverage.
+- RFC 0005 now also has an executable baseline-only Gate 2 fixture-consumption
+  slice for public-checkpoint parity handoff: `attnres::kimi::KimiBaselineSliceParityFixture`
+  plus `attnres::kimi::compare_baseline_slice_parity_fixture_from_dir` consume
+  an externally generated `baseline-slice-parity.json`, validate that its
+  selected layers/modules/tensors match the locally supported shard plan for
+  `KimiLinearModel`, seed the remaining locally initialized parameters
+  deterministically, load the supported local sharded slice, and compare logits
+  plus selected post-layer hidden states with explicit max-abs-diff
+  tolerances.
+- That Gate 2 fixture-consumption slice does not generate reference fixtures in
+  this repository. Producing those fixtures from Hugging Face/Python/public
+  checkpoints remains external and deferred.
 - Python/Hugging Face baseline parity work, public-checkpoint validation,
   AttnRes-Kimi payload loading, optimized KDA kernels, training stability
   validation, and any benchmark conclusions beyond the reduced local harnesses
   are still deferred.
 - No public-checkpoint parity claim is made for either baseline Kimi or
-  AttnRes-Kimi.
+  AttnRes-Kimi until an external reference actually produces matching baseline
+  slice fixtures.
 - No compatibility promise for a stable 1.0 public API yet.
 - No dedicated formal spec document is checked into this repository today.
 
@@ -192,10 +205,11 @@ support" claim.
 - Phase E: validation and benchmark scaffolding. Partially implemented in this
   checkout for local deterministic fixtures and reduced configs only: baseline
   Gate 1 fixture-backed parity, local Gate 2 payload-loading prep for the
-  supported baseline subset, Gate 4 functional tests, reduced Gate 5 numerical
-  agreement checks, and reduced local benchmark groups. Public checkpoint
-  parity, Python/Hugging Face reference work, training validation, and
-  reportable benchmark claims remain deferred.
+  supported baseline subset, baseline-only Gate 2 external fixture consumption
+  for locally loadable sharded slices, Gate 4 functional tests, reduced Gate 5
+  numerical agreement checks, and reduced local benchmark groups. Public
+  checkpoint fixture generation/parity, Python/Hugging Face reference work,
+  training validation, and reportable benchmark claims remain deferred.
 
 See [docs/rfcs/0001-real-model-milestone-scope.md](docs/rfcs/0001-real-model-milestone-scope.md)
 for the accepted sequencing and scope boundaries.

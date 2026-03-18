@@ -93,6 +93,72 @@ impl TinyBaselinePayloadArtifactBuilder {
         }
     }
 
+    pub fn single_layer_dense_kda() -> Self {
+        let config_json = serde_json::json!({
+            "model_type": "kimi_linear",
+            "dtype": "float32",
+            "vocab_size": 16,
+            "hidden_size": 8,
+            "intermediate_size": 16,
+            "moe_intermediate_size": 12,
+            "num_hidden_layers": 1,
+            "num_attention_heads": 2,
+            "num_key_value_heads": 1,
+            "head_dim": 4,
+            "kv_lora_rank": 4,
+            "q_lora_rank": null,
+            "qk_nope_head_dim": 2,
+            "qk_rope_head_dim": 2,
+            "v_head_dim": 4,
+            "mla_use_nope": true,
+            "hidden_act": "silu",
+            "first_k_dense_replace": 1,
+            "moe_layer_freq": 1,
+            "num_experts": 2,
+            "num_experts_per_token": 1,
+            "num_shared_experts": 1,
+            "tie_word_embeddings": false,
+            "use_cache": true,
+            "rms_norm_eps": 1e-5,
+            "linear_attn_config": {
+                "full_attn_layers": [],
+                "kda_layers": [1],
+                "num_heads": 2,
+                "head_dim": 4,
+                "short_conv_kernel_size": 3
+            }
+        });
+        let index_json = serde_json::json!({
+            "metadata": {
+                "total_parameters": 12,
+                "total_size": 48
+            },
+            "weight_map": {
+                "model.embed_tokens.weight": "model-00001-of-00002.safetensors",
+                "model.layers.0.input_layernorm.weight": "model-00001-of-00002.safetensors",
+                "model.layers.0.self_attn.q_proj.weight": "model-00001-of-00002.safetensors",
+                "model.layers.0.self_attn.k_proj.weight": "model-00001-of-00002.safetensors",
+                "model.layers.0.self_attn.v_proj.weight": "model-00001-of-00002.safetensors",
+                "model.layers.0.self_attn.o_proj.weight": "model-00001-of-00002.safetensors",
+                "model.layers.0.post_attention_layernorm.weight": "model-00002-of-00002.safetensors",
+                "model.layers.0.mlp.gate_proj.weight": "model-00002-of-00002.safetensors",
+                "model.layers.0.mlp.up_proj.weight": "model-00002-of-00002.safetensors",
+                "model.layers.0.mlp.down_proj.weight": "model-00002-of-00002.safetensors",
+                "model.norm.weight": "model-00002-of-00002.safetensors",
+                "lm_head.weight": "model-00002-of-00002.safetensors"
+            }
+        });
+        let config: KimiArtifactConfig =
+            serde_json::from_value(config_json.clone()).expect("typed single-layer config");
+        let shards = build_default_shards(&config, &index_json);
+
+        Self {
+            config_json,
+            index_json,
+            shards,
+        }
+    }
+
     pub fn config(&self) -> KimiArtifactConfig {
         serde_json::from_value(self.config_json.clone()).expect("typed config")
     }

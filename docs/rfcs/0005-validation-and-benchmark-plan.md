@@ -26,6 +26,14 @@ The repository now executes a narrow local subset of this RFC:
   changes plus explicit failures for unsupported tensors, missing shard files,
   unsupported dtypes, shape mismatches, and incomplete selected-layer payload
   coverage.
+- Gate 2 now also has an executable baseline-only public-checkpoint parity
+  handoff slice: `src/kimi/slice_parity.rs` defines a machine-readable external
+  `baseline-slice-parity.json` format for the supported baseline subset, and
+  `tests/kimi_rfc_0005_gate2_slice_parity_tests.rs` validates that the repo can
+  consume such fixtures, require exact selected-layer/module/tensor alignment
+  with the local `KimiLinearModel` shard plan, seed still-unloaded local
+  parameters deterministically, and compare logits plus selected post-layer
+  hidden states with explicit tolerances.
 - Gate 4 is executable in-repo through AttnRes-Kimi tests for dual AttnRes
   placement, mixed MLA/KDA block-state progression, embedding-block retention,
   and loud invariant-panics on corrupted internal state.
@@ -108,9 +116,13 @@ Executable repo sub-slice:
 
 - baseline-only local shard loading for selected supported tensors into
   `KimiLinearModel`
+- baseline-only external slice-fixture consumption for that same supported
+  tensor subset via `baseline-slice-parity.json`
 - local negative-path validation for missing shards, unsupported tensors,
-  unsupported dtypes, tensor-shape mismatches, and incomplete selected-module
-  payloads
+  unsupported dtypes, tensor-shape mismatches, incomplete selected-module
+  payloads, fixture kind/version drift, selected-layer mismatches,
+  prompt/token mismatches, tolerance-metadata drift, and unsupported
+  module/tensor requests inside the external fixture
 
 Target:
 
@@ -128,10 +140,12 @@ Pass condition:
 
 Still deferred in this checkout:
 
-- Hugging Face / Python reference execution
+- external generation of `baseline-slice-parity.json` fixtures from Hugging
+  Face / Python / public checkpoints
+- Hugging Face / Python reference execution inside this repository
 - public-checkpoint payloads
-- parity tolerances against a public checkpoint rather than a local synthetic
-  shard bundle
+- any public-checkpoint parity claim until an external reference actually
+  produces matching fixtures against the deterministic seeded slice recipe
 
 ### Gate 3: End-to-end baseline smoke
 

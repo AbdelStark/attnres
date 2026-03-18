@@ -14,12 +14,14 @@
 //! - RFC 0005 local validation/benchmark scaffolding: baseline-only Gate 1
 //!   fixture-backed parity for a deterministic tiny-random Kimi-style bundle,
 //!   baseline-only local sharded-payload loading for the supported tensor
-//!   subset, Gate 4 functional tests, reduced-config Gate 5 hidden/logit
-//!   agreement, and reduced local benchmark groups for baseline Kimi plus
-//!   AttnRes-Kimi.
+//!   subset, baseline-only Gate 2 external slice-fixture consumption for local
+//!   sharded artifacts, Gate 4 functional tests, reduced-config Gate 5
+//!   hidden/logit agreement, and reduced local benchmark groups for baseline
+//!   Kimi plus AttnRes-Kimi.
 //!
-//! Public-checkpoint tensor parity, AttnRes-Kimi payload loading, optimized
-//! kernels, and public Hugging Face/Python parity work remain deferred.
+//! Public-checkpoint tensor parity generation, AttnRes-Kimi payload loading,
+//! optimized kernels, and public Hugging Face/Python execution remain
+//! deferred.
 
 pub mod attention;
 pub mod attn_res_layer;
@@ -36,6 +38,7 @@ pub mod moe;
 pub mod payload;
 pub mod phase;
 pub mod schedule;
+pub mod slice_parity;
 
 pub use attention::{KimiKdaAttention, KimiMlaAttention};
 pub use attn_res_layer::KimiAttnResDecoderLayer;
@@ -68,4 +71,13 @@ pub use phase::{KimiMilestonePhase, KIMI_ARTIFACT_UNDERSTANDING_PHASE, KIMI_IMPL
 pub use schedule::{
     KimiAttentionLayerKind, KimiFeedForwardLayerKind, KimiLayerSchedule, KimiLayerScheduleError,
     KimiScheduledLayer,
+};
+pub use slice_parity::{
+    compare_baseline_slice_parity_fixture, compare_baseline_slice_parity_fixture_from_dir,
+    KimiBaselineSliceParityArtifactSpec, KimiBaselineSliceParityError,
+    KimiBaselineSliceParityFixture, KimiBaselineSliceParityHiddenState,
+    KimiBaselineSliceParityPromptResult, KimiBaselineSliceParityPromptSpec,
+    KimiBaselineSliceParitySliceSpec, KimiBaselineSliceParityTensor,
+    KimiBaselineSliceParityToleranceSpec, KIMI_BASELINE_SLICE_PARITY_FILENAME,
+    KIMI_BASELINE_SLICE_PARITY_KIND, KIMI_BASELINE_SLICE_PARITY_VERSION,
 };

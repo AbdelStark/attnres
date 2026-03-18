@@ -19,6 +19,12 @@ The repository did not maintain a structured changelog before March 16, 2026.
   `KimiArtifactUnderstanding::try_init_baseline_model_from_dir`, plus explicit
   negative tests for missing shards, unsupported tensors/dtypes, shape
   mismatches, and incomplete selected-layer payload coverage.
+- Baseline-only Gate 2 slice parity fixture consumption via
+  `attnres::kimi::KimiBaselineSliceParityFixture` and
+  `attnres::kimi::compare_baseline_slice_parity_fixture_from_dir`, plus
+  negative tests for fixture kind/version drift, selected-layer mismatches,
+  prompt/token mismatches, tolerance metadata drift, and unsupported
+  module-request drift.
 
 ### Changed
 
@@ -30,6 +36,9 @@ The repository did not maintain a structured changelog before March 16, 2026.
 - Kimi milestone docs now describe the new local baseline-only payload-loading
   slice in executable repo terms and keep public-checkpoint/Hugging Face claims
   deferred.
+- Kimi milestone docs now also describe the new external baseline slice-fixture
+  consumption path as fixture consumption only, keeping Hugging Face execution,
+  fixture generation, and any public-checkpoint parity claim deferred.
 
 ### Fixed
 
