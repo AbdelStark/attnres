@@ -12,6 +12,7 @@ use crate::kimi::payload::{load_param_tensor, KimiBaselinePayloadError, KimiDeco
 use crate::kimi::schedule::{KimiAttentionLayerKind, KimiFeedForwardLayerKind};
 use crate::rms_norm::{RmsNorm, RmsNormConfig};
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Module, Debug)]
 enum KimiAttnResAttentionBlock<B: Backend> {
     Mla(KimiMlaAttention<B>),
@@ -32,6 +33,7 @@ impl<B: Backend> KimiAttnResAttentionBlock<B> {
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Module, Debug)]
 enum KimiAttnResFeedForwardBlock<B: Backend> {
     Dense(KimiDenseMlp<B>),

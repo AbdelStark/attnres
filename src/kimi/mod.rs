@@ -52,8 +52,8 @@ pub use attn_res_layer::KimiAttnResDecoderLayer;
 pub use attn_res_model::KimiAttnResModel;
 pub use attn_res_state::{KimiAttnResBlockState, KimiAttnResStateError};
 pub use bootstrap::{
-    KimiAttnResBootstrapLoadResult, KimiAttnResBootstrapParityStatus,
-    KimiAttnResBootstrapPolicy, KimiAttnResBootstrapReport,
+    KimiAttnResBootstrapLoadResult, KimiAttnResBootstrapParityStatus, KimiAttnResBootstrapPolicy,
+    KimiAttnResBootstrapReport,
 };
 pub use cache::{KimiCacheError, KimiDecodeCache, KimiKdaCache, KimiLayerCache, KimiMlaCache};
 pub use config::{
@@ -83,8 +83,7 @@ pub use module_probe::{
     KimiModuleProbeFixtureCase, KimiModuleProbeRequest, KimiModuleProbeRequestCase,
     KimiModuleProbeTarget, KimiModuleProbeToleranceSpec, KIMI_MODULE_PROBE_DEFAULT_SEED,
     KIMI_MODULE_PROBE_DEFAULT_SEQUENCE_LEN, KIMI_MODULE_PROBE_FIXTURE_KIND,
-    KIMI_MODULE_PROBE_REQUEST_KIND, KIMI_MODULE_PROBE_RUNTIME_DTYPE,
-    KIMI_MODULE_PROBE_VERSION,
+    KIMI_MODULE_PROBE_REQUEST_KIND, KIMI_MODULE_PROBE_RUNTIME_DTYPE, KIMI_MODULE_PROBE_VERSION,
 };
 pub use moe::KimiSparseMoe;
 pub use payload::KimiBaselinePayloadError;

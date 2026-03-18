@@ -9,7 +9,7 @@ use crate::kimi::payload::KimiBaselinePayloadError;
 
 /// Explicit warm-start policy for loading baseline Kimi tensors into an
 /// AttnRes-Kimi model.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum KimiAttnResBootstrapPolicy {
     /// Import baseline checkpoint tensors for the matching baseline modules
     /// while leaving every AttnRes operator freshly initialized.
@@ -17,13 +17,8 @@ pub enum KimiAttnResBootstrapPolicy {
     /// This is a structural bootstrap only. It is not a numerical-parity mode
     /// and it does not justify quality claims until additional training or
     /// continued pretraining succeeds.
+    #[default]
     BaselineImportWithFreshAttnRes,
-}
-
-impl Default for KimiAttnResBootstrapPolicy {
-    fn default() -> Self {
-        Self::BaselineImportWithFreshAttnRes
-    }
 }
 
 /// Honest status label for AttnRes bootstrap loads.

@@ -115,26 +115,46 @@ pub struct KimiModuleProbeFixture {
 pub enum KimiModuleProbeError {
     Import(KimiImportError),
     Payload(KimiBaselinePayloadError),
-    UnexpectedRequestKind { kind: String },
-    UnexpectedFixtureKind { kind: String },
-    UnsupportedVersion { version: u32 },
-    UnsupportedRuntimeDtype { runtime_dtype: String },
-    ArtifactFieldMismatch { field: String, expected: String, actual: String },
+    UnexpectedRequestKind {
+        kind: String,
+    },
+    UnexpectedFixtureKind {
+        kind: String,
+    },
+    UnsupportedVersion {
+        version: u32,
+    },
+    UnsupportedRuntimeDtype {
+        runtime_dtype: String,
+    },
+    ArtifactFieldMismatch {
+        field: String,
+        expected: String,
+        actual: String,
+    },
     EmptyProbeList,
-    ProbeCountMismatch { expected: usize, actual: usize },
+    ProbeCountMismatch {
+        expected: usize,
+        actual: usize,
+    },
     ProbeMetadataMismatch {
         probe_name: String,
         field: String,
         expected: String,
         actual: String,
     },
-    ProbeLayerOutOfRange { layer_idx: usize, num_hidden_layers: usize },
+    ProbeLayerOutOfRange {
+        layer_idx: usize,
+        num_hidden_layers: usize,
+    },
     ProbeAttentionKindMismatch {
         layer_idx: usize,
         expected: KimiAttentionLayerKind,
         actual: KimiAttentionLayerKind,
     },
-    DecodeOnlySupportedForAttention { probe_name: String },
+    DecodeOnlySupportedForAttention {
+        probe_name: String,
+    },
     InputShapeMismatch {
         probe_name: String,
         expected_hidden_size: usize,
@@ -159,8 +179,8 @@ pub enum KimiModuleProbeError {
     },
     FingerprintMismatch {
         probe_name: String,
-        expected: KimiModuleProbeFingerprint,
-        actual: KimiModuleProbeFingerprint,
+        expected: Box<KimiModuleProbeFingerprint>,
+        actual: Box<KimiModuleProbeFingerprint>,
     },
     OutputToleranceExceeded {
         probe_name: String,
@@ -454,8 +474,8 @@ pub fn compare_module_probe_fixture_from_dir<B: Backend, P: AsRef<Path>>(
         if expected.fingerprint != actual.fingerprint {
             return Err(KimiModuleProbeError::FingerprintMismatch {
                 probe_name: expected.name.clone(),
-                expected: expected.fingerprint.clone(),
-                actual: actual.fingerprint.clone(),
+                expected: Box::new(expected.fingerprint.clone()),
+                actual: Box::new(actual.fingerprint.clone()),
             });
         }
 
@@ -476,7 +496,9 @@ pub fn compare_module_probe_fixture_from_dir<B: Backend, P: AsRef<Path>>(
                 actual: actual.decode_steps.len(),
             });
         }
-        for (expected_step, actual_step) in expected.decode_steps.iter().zip(actual.decode_steps.iter()) {
+        for (expected_step, actual_step) in
+            expected.decode_steps.iter().zip(actual.decode_steps.iter())
+        {
             if expected_step.token_index != actual_step.token_index {
                 return Err(KimiModuleProbeError::ProbeMetadataMismatch {
                     probe_name: expected.name.clone(),
@@ -494,7 +516,10 @@ pub fn compare_module_probe_fixture_from_dir<B: Backend, P: AsRef<Path>>(
             let diff = max_abs_diff(&expected_step.output, &actual_step.output);
             if diff > fixture.tolerances.output_max_abs_diff {
                 return Err(KimiModuleProbeError::OutputToleranceExceeded {
-                    probe_name: format!("{} decode step {}", expected.name, expected_step.token_index),
+                    probe_name: format!(
+                        "{} decode step {}",
+                        expected.name, expected_step.token_index
+                    ),
                     max_abs_diff: diff,
                     tolerance: fixture.tolerances.output_max_abs_diff,
                 });
@@ -675,13 +700,13 @@ fn generate_probe_case<B: Backend>(
     let mut shard_paths = tensor_names
         .iter()
         .map(|tensor_name| {
-            locator
-                .shard_for_tensor(tensor_name)
-                .ok_or_else(|| KimiImportError::TensorLocator(
+            locator.shard_for_tensor(tensor_name).ok_or_else(|| {
+                KimiImportError::TensorLocator(
                     crate::kimi::index::KimiTensorLocatorError::MissingTensor {
                         tensor_name: tensor_name.clone(),
                     },
-                ))
+                )
+            })
         })
         .collect::<Result<Vec<_>, _>>()?
         .into_iter()
@@ -689,8 +714,12 @@ fn generate_probe_case<B: Backend>(
         .collect::<Vec<_>>();
     shard_paths.sort();
     shard_paths.dedup();
-    let payloads =
-        load_named_tensor_payloads(&locator, &tensor_names, artifact_dir, &understanding.config.dtype)?;
+    let payloads = load_named_tensor_payloads(
+        &locator,
+        &tensor_names,
+        artifact_dir,
+        &understanding.config.dtype,
+    )?;
     let fingerprint = KimiModuleProbeFingerprint {
         tensor_names: tensor_names.clone(),
         shard_paths,
@@ -806,7 +835,9 @@ fn apply_attention_payloads_kda<B: Backend>(
         let leaf = tensor_name
             .strip_prefix(&prefix)
             .expect("module probe KDA tensor should match layer prefix");
-        let payload = payloads.get(tensor_name).expect("module probe payload must exist");
+        let payload = payloads
+            .get(tensor_name)
+            .expect("module probe payload must exist");
         attention.try_apply_tensor_payload(tensor_name, leaf, payload)?;
     }
     Ok(())
@@ -823,7 +854,9 @@ fn apply_attention_payloads_mla<B: Backend>(
         let leaf = tensor_name
             .strip_prefix(&prefix)
             .expect("module probe MLA tensor should match layer prefix");
-        let payload = payloads.get(tensor_name).expect("module probe payload must exist");
+        let payload = payloads
+            .get(tensor_name)
+            .expect("module probe payload must exist");
         attention.try_apply_tensor_payload(tensor_name, leaf, payload)?;
     }
     Ok(())
@@ -837,7 +870,9 @@ fn generate_kda_decode_steps<B: Backend>(
     let mut cache: Option<KimiKdaCache<B>> = None;
     let mut steps = Vec::with_capacity(seq_len);
     for token_index in 0..seq_len {
-        let token = input.clone().slice([0..batch, token_index..token_index + 1, 0..hidden]);
+        let token = input
+            .clone()
+            .slice([0..batch, token_index..token_index + 1, 0..hidden]);
         let (output, next_cache) = attention.forward(token, cache.as_ref());
         steps.push(KimiModuleProbeDecodeStep {
             token_index,
@@ -863,7 +898,9 @@ fn generate_mla_decode_steps<B: Backend>(
     let mut cache: Option<KimiMlaCache<B>> = None;
     let mut steps = Vec::with_capacity(seq_len);
     for token_index in 0..seq_len {
-        let token = input.clone().slice([0..batch, token_index..token_index + 1, 0..hidden]);
+        let token = input
+            .clone()
+            .slice([0..batch, token_index..token_index + 1, 0..hidden]);
         let (output, next_cache) = attention.forward(token, cache.as_ref());
         steps.push(KimiModuleProbeDecodeStep {
             token_index,
@@ -1090,7 +1127,11 @@ fn compare_artifact(
     config: &KimiArtifactConfig,
 ) -> Result<(), KimiModuleProbeError> {
     for (field, expected, actual) in [
-        ("model_type", artifact.model_type.clone(), config.model_type.clone()),
+        (
+            "model_type",
+            artifact.model_type.clone(),
+            config.model_type.clone(),
+        ),
         ("dtype", artifact.dtype.clone(), config.dtype.clone()),
         (
             "num_hidden_layers",

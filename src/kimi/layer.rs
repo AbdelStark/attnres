@@ -10,12 +10,14 @@ use crate::kimi::payload::{load_param_tensor, KimiBaselinePayloadError, KimiDeco
 use crate::kimi::schedule::{KimiAttentionLayerKind, KimiFeedForwardLayerKind};
 use crate::rms_norm::{RmsNorm, RmsNormConfig};
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Module, Debug)]
 enum KimiAttentionBlock<B: Backend> {
     Mla(KimiMlaAttention<B>),
     Kda(KimiKdaAttention<B>),
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Module, Debug)]
 enum KimiFeedForwardBlock<B: Backend> {
     Dense(KimiDenseMlp<B>),
@@ -76,13 +78,17 @@ impl KimiBaselineConfig {
             .map_err(KimiArtifactConfigError::from)?;
 
         let attention = match layer.attention_kind {
-            KimiAttentionLayerKind::FullAttention => KimiAttentionBlock::Mla(self.attention.init_mla(device)),
+            KimiAttentionLayerKind::FullAttention => {
+                KimiAttentionBlock::Mla(self.attention.init_mla(device))
+            }
             KimiAttentionLayerKind::LinearAttentionKda => {
                 KimiAttentionBlock::Kda(self.attention.init_kda(device))
             }
         };
         let feed_forward = match layer.feed_forward_kind {
-            KimiFeedForwardLayerKind::DenseMlp => KimiFeedForwardBlock::Dense(self.dense_mlp.init(device)),
+            KimiFeedForwardLayerKind::DenseMlp => {
+                KimiFeedForwardBlock::Dense(self.dense_mlp.init(device))
+            }
             KimiFeedForwardLayerKind::SparseMoe => {
                 KimiFeedForwardBlock::SparseMoe(self.sparse_moe.init(device))
             }

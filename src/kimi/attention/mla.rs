@@ -127,11 +127,9 @@ impl<B: Backend> KimiMlaAttention<B> {
                 };
                 load_param_tensor(weight, tensor_name, payload)
             }
-            "kv_a_proj_with_mqa.weight" => load_param_tensor(
-                &mut self.kv_a_proj_with_mqa.weight,
-                tensor_name,
-                payload,
-            ),
+            "kv_a_proj_with_mqa.weight" => {
+                load_param_tensor(&mut self.kv_a_proj_with_mqa.weight, tensor_name, payload)
+            }
             "kv_a_layernorm.weight" => {
                 load_param_tensor(self.kv_a_layernorm.gamma_param_mut(), tensor_name, payload)
             }
@@ -175,22 +173,23 @@ impl<B: Backend> KimiMlaAttention<B> {
         ]);
 
         let compressed_kv = self.kv_a_proj_with_mqa.forward(hidden);
-        let latent_kv = compressed_kv.clone().slice([
-            0..batch,
-            0..seq_len,
-            0..self.kv_lora_rank,
-        ]);
+        let latent_kv = compressed_kv
+            .clone()
+            .slice([0..batch, 0..seq_len, 0..self.kv_lora_rank]);
         let k_rot = compressed_kv.slice([
             0..batch,
             0..seq_len,
             self.kv_lora_rank..self.kv_lora_rank + self.qk_rope_head_dim,
         ]);
-        let kv_states = self.kv_b_proj.forward(self.kv_a_layernorm.forward(latent_kv)).reshape([
-            batch,
-            seq_len,
-            self.num_attention_heads,
-            self.qk_nope_head_dim + self.v_head_dim,
-        ]);
+        let kv_states = self
+            .kv_b_proj
+            .forward(self.kv_a_layernorm.forward(latent_kv))
+            .reshape([
+                batch,
+                seq_len,
+                self.num_attention_heads,
+                self.qk_nope_head_dim + self.v_head_dim,
+            ]);
         let kv_states = kv_states.swap_dims(1, 2);
         let k_pass = kv_states.clone().slice([
             0..batch,
@@ -215,7 +214,12 @@ impl<B: Backend> KimiMlaAttention<B> {
             Tensor::cat(
                 vec![
                     Tensor::zeros(
-                        [batch, self.num_attention_heads, seq_len, self.qk_nope_head_dim],
+                        [
+                            batch,
+                            self.num_attention_heads,
+                            seq_len,
+                            self.qk_nope_head_dim,
+                        ],
                         &device,
                     ),
                     q_rot,
@@ -229,7 +233,12 @@ impl<B: Backend> KimiMlaAttention<B> {
             Tensor::cat(
                 vec![
                     Tensor::zeros(
-                        [batch, self.num_attention_heads, seq_len, self.qk_nope_head_dim],
+                        [
+                            batch,
+                            self.num_attention_heads,
+                            seq_len,
+                            self.qk_nope_head_dim,
+                        ],
                         &device,
                     ),
                     k_rot,
@@ -255,7 +264,8 @@ impl<B: Backend> KimiMlaAttention<B> {
         let all_values = next_cache.values().clone();
         let total_len = next_cache.processed_tokens();
         let prev_len = total_len - seq_len;
-        let scores = query_states.matmul(all_keys.swap_dims(2, 3)) / (self.q_head_dim as f64).sqrt();
+        let scores =
+            query_states.matmul(all_keys.swap_dims(2, 3)) / (self.q_head_dim as f64).sqrt();
         let scores = scores
             + mla_chunk_causal_mask::<B>(batch, seq_len, total_len, prev_len, &device)
                 .unsqueeze_dim::<4>(1);

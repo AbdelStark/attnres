@@ -1,5 +1,6 @@
 use attnres::kimi::{
-    build_default_module_probe_request, compare_baseline_slice_parity_fixture_with_manifest_from_dir,
+    build_default_module_probe_request,
+    compare_baseline_slice_parity_fixture_with_manifest_from_dir,
     compare_module_probe_fixture_from_dir, generate_module_probe_fixture_from_dir,
     KimiArtifactUnderstanding, KimiBaselineSliceRequestSpec, KimiModuleProbeFixture,
     KimiModuleProbeRequest, KIMI_BASELINE_SLICE_REQUEST_FILENAME,

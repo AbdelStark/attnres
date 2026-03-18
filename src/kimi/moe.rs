@@ -75,11 +75,9 @@ impl<B: Backend> KimiSparseMoe<B> {
     ) -> Result<(), KimiBaselinePayloadError> {
         match remainder {
             "gate.weight" => load_param_tensor(&mut self.router.weight, tensor_name, payload),
-            "gate.e_score_correction_bias" => load_param_tensor(
-                &mut self.router_score_bias_correction,
-                tensor_name,
-                payload,
-            ),
+            "gate.e_score_correction_bias" => {
+                load_param_tensor(&mut self.router_score_bias_correction, tensor_name, payload)
+            }
             "shared_experts.gate_proj.weight" => {
                 let Some(expert) = self.shared_expert.as_mut() else {
                     return Err(KimiBaselinePayloadError::UnsupportedTensorApplication {
@@ -226,8 +224,7 @@ fn restrict_scores_to_selected_groups<B: Backend>(
     let group_scores = top2_values
         .sum_dim(3)
         .reshape([batch, seq_len, num_expert_group]);
-    let (_topk_group_values, topk_group_indices) =
-        group_scores.topk_with_indices(topk_group, 2);
+    let (_topk_group_values, topk_group_indices) = group_scores.topk_with_indices(topk_group, 2);
     let group_mask = Tensor::<B, 3>::zeros([batch, seq_len, num_expert_group], &scores.device())
         .scatter(
             2,

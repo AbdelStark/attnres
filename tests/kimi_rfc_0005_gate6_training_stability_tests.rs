@@ -187,9 +187,7 @@ where
     FLogits: Fn(&M, Tensor<TrainBackend, 2, Int>) -> Tensor<TrainBackend, 3>,
 {
     let mut optimizer = AdamConfig::new().init();
-    let loss_fn = CrossEntropyLossConfig::new()
-        .with_logits(true)
-        .init(device);
+    let loss_fn = CrossEntropyLossConfig::new().with_logits(true).init(device);
     let mut observation = TrainingObservation {
         label: label.to_string(),
         seed,
@@ -303,12 +301,9 @@ fn assert_observation_stable(observation: &TrainingObservation) {
     );
 }
 
-fn assert_attn_res_tracks_baseline(
-    baseline: &TrainingObservation,
-    attn_res: &TrainingObservation,
-) {
-    let final_loss_cap =
-        baseline.final_loss() * RELATIVE_ATTN_RES_FINAL_LOSS_CAP + RELATIVE_ATTN_RES_FINAL_LOSS_SLACK;
+fn assert_attn_res_tracks_baseline(baseline: &TrainingObservation, attn_res: &TrainingObservation) {
+    let final_loss_cap = baseline.final_loss() * RELATIVE_ATTN_RES_FINAL_LOSS_CAP
+        + RELATIVE_ATTN_RES_FINAL_LOSS_SLACK;
     assert!(
         attn_res.final_loss() <= final_loss_cap,
         "AttnRes final loss drifted too far above baseline for seed {}: baseline_final_loss={} attn_res_final_loss={} cap={}",

@@ -320,24 +320,31 @@ fn default_tensor_for_name(
         "model.layers.0.self_attn.q_proj.weight" => vec![hidden, kda_qk_dim],
         "model.layers.0.self_attn.k_proj.weight" => vec![hidden, kda_qk_dim],
         "model.layers.0.self_attn.v_proj.weight" => vec![hidden, kda_v_dim],
-        "model.layers.0.self_attn.q_conv1d.weight"
-        | "model.layers.0.self_attn.k_conv1d.weight" => {
-            vec![kda_qk_dim, 1, config.linear_attn_config.short_conv_kernel_size]
+        "model.layers.0.self_attn.q_conv1d.weight" | "model.layers.0.self_attn.k_conv1d.weight" => {
+            vec![
+                kda_qk_dim,
+                1,
+                config.linear_attn_config.short_conv_kernel_size,
+            ]
         }
         "model.layers.0.self_attn.v_conv1d.weight" => {
-            vec![kda_v_dim, 1, config.linear_attn_config.short_conv_kernel_size]
+            vec![
+                kda_v_dim,
+                1,
+                config.linear_attn_config.short_conv_kernel_size,
+            ]
         }
         "model.layers.0.self_attn.A_log" => vec![1, 1, config.linear_attn_config.num_heads, 1],
-        "model.layers.0.self_attn.f_a_proj.weight"
-        | "model.layers.0.self_attn.g_a_proj.weight" => {
+        "model.layers.0.self_attn.f_a_proj.weight" | "model.layers.0.self_attn.g_a_proj.weight" => {
             vec![hidden, config.linear_attn_config.head_dim]
         }
-        "model.layers.0.self_attn.f_b_proj.weight"
-        | "model.layers.0.self_attn.g_b_proj.weight" => {
+        "model.layers.0.self_attn.f_b_proj.weight" | "model.layers.0.self_attn.g_b_proj.weight" => {
             vec![config.linear_attn_config.head_dim, kda_v_dim]
         }
         "model.layers.0.self_attn.dt_bias" => vec![kda_v_dim],
-        "model.layers.0.self_attn.b_proj.weight" => vec![hidden, config.linear_attn_config.num_heads],
+        "model.layers.0.self_attn.b_proj.weight" => {
+            vec![hidden, config.linear_attn_config.num_heads]
+        }
         "model.layers.0.self_attn.o_norm.weight" => vec![config.linear_attn_config.head_dim],
         "model.layers.0.self_attn.o_proj.weight" => vec![kda_v_dim, hidden],
         "model.layers.0.post_attention_layernorm.weight" => vec![hidden],

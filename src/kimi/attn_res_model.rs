@@ -3,9 +3,9 @@ use burn::nn::{Embedding, EmbeddingConfig, Linear, LinearConfig};
 use burn::prelude::*;
 use std::path::Path;
 
-use crate::kimi::bootstrap::KimiAttnResBootstrapPolicy;
 use crate::kimi::attn_res_layer::KimiAttnResDecoderLayer;
 use crate::kimi::attn_res_state::KimiAttnResBlockState;
+use crate::kimi::bootstrap::KimiAttnResBootstrapPolicy;
 use crate::kimi::cache::{KimiCacheError, KimiDecodeCache};
 use crate::kimi::config::{KimiArtifactConfig, KimiAttnResConfig, KimiAttnResConfigError};
 use crate::kimi::import::{KimiArtifactUnderstanding, KimiImportSelection};

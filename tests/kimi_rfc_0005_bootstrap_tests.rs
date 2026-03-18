@@ -78,11 +78,18 @@ fn kimi_rfc_0005_bootstrap_default_loader_matches_explicit_policy_path() {
         .unwrap();
 
     seed_backend(&device, 20260318);
-    let implicit =
-        KimiAttnResModel::<TestBackend>::try_from_artifact_dir(artifact.path(), 2, selection, &device)
-            .unwrap();
+    let implicit = KimiAttnResModel::<TestBackend>::try_from_artifact_dir(
+        artifact.path(),
+        2,
+        selection,
+        &device,
+    )
+    .unwrap();
 
-    let diff = max_abs_diff(explicit.model.forward(prompt.clone()), implicit.forward(prompt));
+    let diff = max_abs_diff(
+        explicit.model.forward(prompt.clone()),
+        implicit.forward(prompt),
+    );
     assert!(
         diff < 1e-6,
         "explicit bootstrap policy path should match the convenience loader, diff={diff}",

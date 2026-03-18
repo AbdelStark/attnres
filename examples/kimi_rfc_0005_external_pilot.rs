@@ -379,13 +379,25 @@ fn default_tensor_for_name(
         "model.layers.0.self_attn.k_proj.weight" => vec![hidden, kda_qk_dim],
         "model.layers.0.self_attn.v_proj.weight" => vec![hidden, kda_v_dim],
         "model.layers.0.self_attn.q_conv1d.weight" => {
-            vec![kda_qk_dim, 1, config.linear_attn_config.short_conv_kernel_size]
+            vec![
+                kda_qk_dim,
+                1,
+                config.linear_attn_config.short_conv_kernel_size,
+            ]
         }
         "model.layers.0.self_attn.k_conv1d.weight" => {
-            vec![kda_qk_dim, 1, config.linear_attn_config.short_conv_kernel_size]
+            vec![
+                kda_qk_dim,
+                1,
+                config.linear_attn_config.short_conv_kernel_size,
+            ]
         }
         "model.layers.0.self_attn.v_conv1d.weight" => {
-            vec![kda_v_dim, 1, config.linear_attn_config.short_conv_kernel_size]
+            vec![
+                kda_v_dim,
+                1,
+                config.linear_attn_config.short_conv_kernel_size,
+            ]
         }
         "model.layers.0.self_attn.A_log" => vec![1, 1, config.linear_attn_config.num_heads, 1],
         "model.layers.0.self_attn.f_a_proj.weight" => {
@@ -395,7 +407,9 @@ fn default_tensor_for_name(
             vec![config.linear_attn_config.head_dim, kda_v_dim]
         }
         "model.layers.0.self_attn.dt_bias" => vec![kda_v_dim],
-        "model.layers.0.self_attn.b_proj.weight" => vec![hidden, config.linear_attn_config.num_heads],
+        "model.layers.0.self_attn.b_proj.weight" => {
+            vec![hidden, config.linear_attn_config.num_heads]
+        }
         "model.layers.0.self_attn.g_a_proj.weight" => {
             vec![hidden, config.linear_attn_config.head_dim]
         }
@@ -415,7 +429,10 @@ fn default_tensor_for_name(
         }
         "model.layers.1.self_attn.kv_a_layernorm.weight" => vec![config.kv_lora_rank],
         "model.layers.1.self_attn.kv_b_proj.weight" => {
-            vec![config.kv_lora_rank, config.num_attention_heads * (config.qk_nope_head_dim + config.v_head_dim)]
+            vec![
+                config.kv_lora_rank,
+                config.num_attention_heads * (config.qk_nope_head_dim + config.v_head_dim),
+            ]
         }
         "model.layers.1.self_attn.o_proj.weight" => vec![mla_out_dim, hidden],
         "model.layers.1.post_attention_layernorm.weight" => vec![hidden],

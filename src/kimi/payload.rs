@@ -241,10 +241,7 @@ pub(crate) fn load_param_tensor<const D: usize, B: Backend>(
 
     let param_id = target.id;
     let device = target.lazy_device();
-    let tensor = Tensor::<B, D>::from_data(
-        TensorData::new(values, expected.clone()),
-        &device,
-    );
+    let tensor = Tensor::<B, D>::from_data(TensorData::new(values, expected.clone()), &device);
     *target = target.clone().transform_for_load(tensor, param_id);
     Ok(())
 }

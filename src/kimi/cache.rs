@@ -321,6 +321,7 @@ pub struct KimiKdaCache<B: Backend> {
 }
 
 impl<B: Backend> KimiKdaCache<B> {
+    #[allow(clippy::too_many_arguments)]
     pub fn try_new(
         q_conv_state: Tensor<B, 4>,
         k_conv_state: Tensor<B, 4>,

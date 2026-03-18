@@ -16,9 +16,12 @@ fn kimi_rfc_0005_gate2_module_probe_roundtrip_covers_kda_mla_norm_and_lm_head() 
     let request = build_default_module_probe_request(&config).unwrap();
 
     seed_backend(&device, request.seed);
-    let fixture =
-        generate_module_probe_fixture_from_dir::<TestBackend, _>(artifact.path(), &request, &device)
-            .unwrap();
+    let fixture = generate_module_probe_fixture_from_dir::<TestBackend, _>(
+        artifact.path(),
+        &request,
+        &device,
+    )
+    .unwrap();
 
     assert_eq!(fixture.probes.len(), 4);
     assert!(matches!(
@@ -80,9 +83,12 @@ fn kimi_rfc_0005_gate2_module_probe_rejects_wrong_attention_kind_for_layer() {
 
     request.probes[0].target = KimiModuleProbeTarget::MlaAttention { layer_idx: 0 };
 
-    let err =
-        generate_module_probe_fixture_from_dir::<TestBackend, _>(artifact.path(), &request, &device)
-            .unwrap_err();
+    let err = generate_module_probe_fixture_from_dir::<TestBackend, _>(
+        artifact.path(),
+        &request,
+        &device,
+    )
+    .unwrap_err();
 
     assert!(matches!(
         err,
@@ -103,9 +109,12 @@ fn kimi_rfc_0005_gate2_module_probe_detects_output_shape_drift() {
     let request = build_default_module_probe_request(&config).unwrap();
 
     seed_backend(&device, request.seed);
-    let mut fixture =
-        generate_module_probe_fixture_from_dir::<TestBackend, _>(artifact.path(), &request, &device)
-            .unwrap();
+    let mut fixture = generate_module_probe_fixture_from_dir::<TestBackend, _>(
+        artifact.path(),
+        &request,
+        &device,
+    )
+    .unwrap();
     fixture.probes[0].output.dims[2] += 1;
 
     seed_backend(&device, request.seed);
@@ -136,9 +145,12 @@ fn kimi_rfc_0005_gate2_module_probe_detects_decode_cache_token_drift() {
     let request = build_default_module_probe_request(&config).unwrap();
 
     seed_backend(&device, request.seed);
-    let mut fixture =
-        generate_module_probe_fixture_from_dir::<TestBackend, _>(artifact.path(), &request, &device)
-            .unwrap();
+    let mut fixture = generate_module_probe_fixture_from_dir::<TestBackend, _>(
+        artifact.path(),
+        &request,
+        &device,
+    )
+    .unwrap();
     match &mut fixture.probes[0].decode_steps[0].cache {
         KimiModuleProbeCache::Kda {
             processed_tokens, ..

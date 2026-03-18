@@ -132,10 +132,7 @@ fn kimi_rfc_0005_gate1_rejects_unsupported_selected_layer_tensors() {
             tensor_name,
             ..
         }) => {
-            assert_eq!(
-                tensor_name,
-                "model.layers.1.self_attn.q_a_proj.weight"
-            );
+            assert_eq!(tensor_name, "model.layers.1.self_attn.q_a_proj.weight");
         }
         other => panic!("expected unsupported tensor coverage error, got {other:?}"),
     }

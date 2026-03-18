@@ -53,15 +53,27 @@ impl KimiAttentionRuntimeConfig {
                 .with_bias(false)
                 .init(device),
             q_conv1d_weight: Param::from_tensor(Tensor::zeros(
-                [projection_k_size, 1, self.linear_attention_short_conv_kernel_size],
+                [
+                    projection_k_size,
+                    1,
+                    self.linear_attention_short_conv_kernel_size,
+                ],
                 device,
             )),
             k_conv1d_weight: Param::from_tensor(Tensor::zeros(
-                [projection_k_size, 1, self.linear_attention_short_conv_kernel_size],
+                [
+                    projection_k_size,
+                    1,
+                    self.linear_attention_short_conv_kernel_size,
+                ],
                 device,
             )),
             v_conv1d_weight: Param::from_tensor(Tensor::zeros(
-                [projection_v_size, 1, self.linear_attention_short_conv_kernel_size],
+                [
+                    projection_v_size,
+                    1,
+                    self.linear_attention_short_conv_kernel_size,
+                ],
                 device,
             )),
             a_log: Param::from_tensor(Tensor::zeros(
@@ -96,7 +108,6 @@ impl KimiAttentionRuntimeConfig {
             short_conv_kernel_size: self.linear_attention_short_conv_kernel_size,
         }
     }
-
 }
 
 impl<B: Backend> KimiKdaAttention<B> {
@@ -110,15 +121,9 @@ impl<B: Backend> KimiKdaAttention<B> {
             "q_proj.weight" => load_param_tensor(&mut self.q_proj.weight, tensor_name, payload),
             "k_proj.weight" => load_param_tensor(&mut self.k_proj.weight, tensor_name, payload),
             "v_proj.weight" => load_param_tensor(&mut self.v_proj.weight, tensor_name, payload),
-            "q_conv1d.weight" => {
-                load_param_tensor(&mut self.q_conv1d_weight, tensor_name, payload)
-            }
-            "k_conv1d.weight" => {
-                load_param_tensor(&mut self.k_conv1d_weight, tensor_name, payload)
-            }
-            "v_conv1d.weight" => {
-                load_param_tensor(&mut self.v_conv1d_weight, tensor_name, payload)
-            }
+            "q_conv1d.weight" => load_param_tensor(&mut self.q_conv1d_weight, tensor_name, payload),
+            "k_conv1d.weight" => load_param_tensor(&mut self.k_conv1d_weight, tensor_name, payload),
+            "v_conv1d.weight" => load_param_tensor(&mut self.v_conv1d_weight, tensor_name, payload),
             "A_log" => load_param_tensor(&mut self.a_log, tensor_name, payload),
             "f_a_proj.weight" => load_param_tensor(&mut self.f_a_proj.weight, tensor_name, payload),
             "f_b_proj.weight" => load_param_tensor(&mut self.f_b_proj.weight, tensor_name, payload),
@@ -189,8 +194,14 @@ impl<B: Backend> KimiKdaAttention<B> {
                 .swap_dims(1, 2),
         );
 
-        let (recurrent_output, next_recurrent_state) =
-            self.recurrent_kda(q, k, v, gate, beta, cache.map(|state| state.recurrent_state()));
+        let (recurrent_output, next_recurrent_state) = self.recurrent_kda(
+            q,
+            k,
+            v,
+            gate,
+            beta,
+            cache.map(|state| state.recurrent_state()),
+        );
 
         let output_gate = self
             .g_b_proj
@@ -247,7 +258,9 @@ impl<B: Backend> KimiKdaAttention<B> {
         let [batch, heads, seq_len, head_dim] = projected.dims();
         let history_len = cache.map(|state| state.dims()[2]).unwrap_or(0);
         let combined = match cache {
-            Some(previous) if history_len > 0 => Tensor::cat(vec![previous.clone(), projected.clone()], 2),
+            Some(previous) if history_len > 0 => {
+                Tensor::cat(vec![previous.clone(), projected.clone()], 2)
+            }
             _ => projected.clone(),
         };
         let kernel_size = self.short_conv_kernel_size;
@@ -256,15 +269,21 @@ impl<B: Backend> KimiKdaAttention<B> {
             .map(|token_offset| {
                 let end = history_len + token_offset + 1;
                 let start = end.saturating_sub(kernel_size);
-                let window = combined.clone().slice([0..batch, 0..heads, start..end, 0..head_dim]);
+                let window = combined
+                    .clone()
+                    .slice([0..batch, 0..heads, start..end, 0..head_dim]);
                 let window_len = end - start;
                 let weight_slice = reshaped_weights
                     .clone()
                     .slice([0..heads, 0..head_dim, kernel_size - window_len..kernel_size])
                     .swap_dims(1, 2)
                     .unsqueeze_dim::<4>(0);
-                silu((window * weight_slice).sum_dim(2).reshape([batch, heads, head_dim]))
-                    .unsqueeze_dim::<4>(2)
+                silu(
+                    (window * weight_slice)
+                        .sum_dim(2)
+                        .reshape([batch, heads, head_dim]),
+                )
+                .unsqueeze_dim::<4>(2)
             })
             .collect::<Vec<_>>();
         let output = Tensor::cat(outputs, 2);
@@ -321,21 +340,28 @@ impl<B: Backend> KimiKdaAttention<B> {
         let k = l2_normalize_last_dim(k);
         let mut state = match initial_state {
             Some(previous) => previous.clone(),
-            None => Tensor::zeros(
-                [batch, heads, head_dim, self.value_head_dim],
-                &q.device(),
-            ),
+            None => Tensor::zeros([batch, heads, head_dim, self.value_head_dim], &q.device()),
         };
 
         let mut outputs = Vec::with_capacity(seq_len);
         for token_offset in 0..seq_len {
             let q_i = q
                 .clone()
-                .slice([0..batch, 0..heads, token_offset..token_offset + 1, 0..head_dim])
+                .slice([
+                    0..batch,
+                    0..heads,
+                    token_offset..token_offset + 1,
+                    0..head_dim,
+                ])
                 .reshape([batch, heads, head_dim]);
             let k_i = k
                 .clone()
-                .slice([0..batch, 0..heads, token_offset..token_offset + 1, 0..head_dim])
+                .slice([
+                    0..batch,
+                    0..heads,
+                    token_offset..token_offset + 1,
+                    0..head_dim,
+                ])
                 .reshape([batch, heads, head_dim]);
             let v_i = v
                 .clone()
@@ -348,7 +374,12 @@ impl<B: Backend> KimiKdaAttention<B> {
                 .reshape([batch, heads, self.value_head_dim]);
             let g_i = g
                 .clone()
-                .slice([0..batch, 0..heads, token_offset..token_offset + 1, 0..head_dim])
+                .slice([
+                    0..batch,
+                    0..heads,
+                    token_offset..token_offset + 1,
+                    0..head_dim,
+                ])
                 .reshape([batch, heads, head_dim]);
             let beta_i = beta
                 .clone()
@@ -360,8 +391,7 @@ impl<B: Backend> KimiKdaAttention<B> {
                 .sum_dim(2)
                 .reshape([batch, heads, self.value_head_dim]);
             let delta_value = (v_i - projected_value) * beta_i.unsqueeze_dim::<3>(2);
-            state = state
-                + k_i.unsqueeze_dim::<4>(3) * delta_value.clone().unsqueeze_dim::<4>(2);
+            state = state + k_i.unsqueeze_dim::<4>(3) * delta_value.clone().unsqueeze_dim::<4>(2);
             let output_i = (state.clone() * q_i.unsqueeze_dim::<4>(3))
                 .sum_dim(2)
                 .reshape([batch, heads, self.value_head_dim])

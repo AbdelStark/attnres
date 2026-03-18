@@ -605,7 +605,10 @@ impl KimiArtifactConfig {
                 hidden_act: self.hidden_act.clone(),
             });
         }
-        if !matches!(self.moe_router_activation_func.as_str(), "sigmoid" | "softmax") {
+        if !matches!(
+            self.moe_router_activation_func.as_str(),
+            "sigmoid" | "softmax"
+        ) {
             return Err(KimiArtifactConfigError::MoeRouterActivationUnsupported {
                 moe_router_activation_func: self.moe_router_activation_func.clone(),
             });
