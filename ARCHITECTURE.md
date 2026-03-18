@@ -104,10 +104,10 @@ completed blocks
   - Parses shard-index metadata, resolves tensor-name to shard paths, and emits
     explicit tensor-to-module coverage reports plus selected-layer/full shard
     plans.
-  - Keeps the baseline payload-loading path separate from both
-    `KimiAttnResModel` and the reference `AttnResTransformer` by loading only
-    into `KimiLinearModel`, via a local sharded-`safetensors` baseline-only
-    path for the supported tensor subset.
+  - Keeps local sharded-`safetensors` payload loading separate from the
+    reference `AttnResTransformer` while allowing the currently supported
+    baseline tensor subset to populate both `KimiLinearModel` and
+    `KimiAttnResModel`; AttnRes operator parameters remain locally initialized.
   - Adds `src/kimi/slice_parity.rs` as a separate baseline-only Gate 2 fixture
     handoff path: it emits machine-readable `baseline-slice-request.json`
     manifests for `KimiLinearModel`, validates those manifests against the
@@ -116,13 +116,15 @@ completed blocks
     manifest-to-fixture metadata agreement before comparing logits plus
     selected hidden states after local payload loading, without crossing into
     `KimiAttnResModel` or the reference `AttnResTransformer`.
-  - Runs a local baseline-only Gate 1 fixture-backed parity harness, a local
-    Gate 2 payload-loading harness for supported baseline tensors, a local Gate
-    2 external-generator handoff plus external-fixture consumption harness for
-    the same supported baseline subset, Gate 4/5 checks, and reduced local
-    benchmark groups, but still does not provide public-checkpoint fixture
-    generation/parity, AttnRes-Kimi payload loading, Python/Hugging Face
-    reference parity, or reportable benchmark conclusions.
+  - Runs a local baseline-only Gate 1 fixture-backed parity harness, local
+    Gate 2 payload-loading harnesses for the supported baseline tensor subset
+    into both baseline Kimi and AttnRes-Kimi models, a local Gate 2
+    external-generator handoff plus external-fixture consumption harness for
+    the same supported baseline subset on the baseline path, Gate 4/5 checks,
+    and reduced local benchmark groups, but still does not provide
+    public-checkpoint fixture generation/parity, AttnRes-Kimi external parity
+    fixtures, Python/Hugging Face reference parity, or reportable benchmark
+    conclusions.
 
 ## Invariants
 

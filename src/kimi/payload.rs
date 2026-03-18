@@ -6,16 +6,17 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::{Display, Formatter};
 use std::path::Path;
 
-use crate::kimi::config::KimiArtifactConfigError;
+use crate::kimi::config::{KimiArtifactConfigError, KimiAttnResConfigError};
 use crate::kimi::import::{
     KimiImportCoverageError, KimiImportError, KimiImportPlan, KimiModuleRef, KimiShardResolver,
     KimiShardResolverError,
 };
 
-/// Typed failures for baseline-only tensor payload loading from local sharded artifacts.
+/// Typed failures for local Kimi tensor payload loading from sharded artifacts.
 #[derive(Debug, Clone, PartialEq)]
 pub enum KimiBaselinePayloadError {
     Import(KimiImportError),
+    AttnResConfig(KimiAttnResConfigError),
     Coverage(KimiImportCoverageError),
     ShardResolver(KimiShardResolverError),
     ReadFailed {
@@ -54,6 +55,7 @@ impl Display for KimiBaselinePayloadError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Import(err) => write!(f, "{err}"),
+            Self::AttnResConfig(err) => write!(f, "{err}"),
             Self::Coverage(err) => write!(f, "{err}"),
             Self::ShardResolver(err) => write!(f, "{err}"),
             Self::ReadFailed { path, detail } => {
@@ -107,6 +109,12 @@ impl std::error::Error for KimiBaselinePayloadError {}
 impl From<KimiArtifactConfigError> for KimiBaselinePayloadError {
     fn from(err: KimiArtifactConfigError) -> Self {
         Self::Import(KimiImportError::Config(err))
+    }
+}
+
+impl From<KimiAttnResConfigError> for KimiBaselinePayloadError {
+    fn from(err: KimiAttnResConfigError) -> Self {
+        Self::AttnResConfig(err)
     }
 }
 

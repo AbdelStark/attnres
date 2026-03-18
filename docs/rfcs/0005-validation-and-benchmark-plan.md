@@ -26,6 +26,14 @@ The repository now executes a narrow local subset of this RFC:
   changes plus explicit failures for unsupported tensors, missing shard files,
   unsupported dtypes, shape mismatches, and incomplete selected-layer payload
   coverage.
+- Gate 2 now also has an executable local preparation slice for the
+  AttnRes-Kimi path on that same supported baseline tensor subset:
+  `tests/kimi_rfc_0005_gate2_attn_res_payload_tests.rs` loads the local shard
+  bytes into `KimiAttnResModel` while leaving AttnRes operator parameters
+  locally initialized, then checks deterministic output changes, cached decode
+  availability, standard-vs-two-phase agreement after loading, and the same
+  explicit failures for unsupported tensors, missing shard files, and
+  incomplete selected-layer payload coverage.
 - Gate 2 now also has an executable baseline-only external-generator handoff
   slice: `src/kimi/slice_parity.rs` defines a machine-readable
   `baseline-slice-request.json` manifest for the supported `KimiLinearModel`
@@ -126,6 +134,9 @@ Executable repo sub-slice:
 
 - baseline-only local shard loading for selected supported tensors into
   `KimiLinearModel`
+- local shard loading for that same supported baseline tensor subset into
+  `KimiAttnResModel`, with AttnRes operator parameters still locally
+  initialized
 - baseline-only external-generator request manifests for that same supported
   subset via `baseline-slice-request.json`
 - baseline-only external slice-fixture consumption for that same supported

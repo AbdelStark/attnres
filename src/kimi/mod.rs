@@ -13,16 +13,17 @@
 //!   AttnRes operations per decoder layer.
 //! - RFC 0005 local validation/benchmark scaffolding: baseline-only Gate 1
 //!   fixture-backed parity for a deterministic tiny-random Kimi-style bundle,
-//!   baseline-only local sharded-payload loading for the supported tensor
-//!   subset, baseline-only Gate 2 external slice-fixture consumption for local
-//!   sharded artifacts, baseline-only Gate 2 external-generator handoff
-//!   manifests for that same supported subset, Gate 4 functional tests,
-//!   reduced-config Gate 5 hidden/logit agreement, and reduced local benchmark
-//!   groups for baseline Kimi plus AttnRes-Kimi.
+//!   local sharded-payload loading for the supported baseline tensor subset
+//!   into both `KimiLinearModel` and `KimiAttnResModel`, baseline-only Gate 2
+//!   external slice-fixture consumption for local sharded artifacts,
+//!   baseline-only Gate 2 external-generator handoff manifests for that same
+//!   supported subset, Gate 4 functional tests, reduced-config Gate 5
+//!   hidden/logit agreement, and reduced local benchmark groups for baseline
+//!   Kimi plus AttnRes-Kimi.
 //!
-//! Public-checkpoint tensor parity generation, AttnRes-Kimi payload loading,
-//! optimized kernels, and public Hugging Face/Python execution remain
-//! deferred.
+//! Public-checkpoint tensor parity generation, AttnRes-Kimi external parity
+//! generation, optimized kernels, and public Hugging Face/Python execution
+//! remain deferred.
 
 pub mod attention;
 pub mod attn_res_layer;

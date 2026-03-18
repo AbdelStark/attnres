@@ -48,8 +48,7 @@ Known limitations:
   baseline Kimi Linear scaffolding, and RFC 0003 sharded checkpoint-import
   scaffolding: typed tensor locators, tensor-to-module coverage reports,
   selected-layer/full shard planning, dtype policy, shard-path resolution, and
-  a baseline-only local payload loader for the currently supported tensor
-  subset.
+  a local payload loader for the currently supported baseline tensor subset.
 - `src/kimi/` now also implements RFC 0004 AttnRes-Kimi execution scaffolding:
   a separate `KimiAttnResModel` / `KimiAttnResDecoderLayer` path that keeps the
   RFC 0002 MLA-vs-KDA and dense-vs-MoE sublayer schedule while inserting two
@@ -63,17 +62,25 @@ Known limitations:
 - That Gate 1 slice validates only what the repo can execute today: Kimi-style
   `config.json`, shard-index coverage for the selected baseline modules, and
   committed reference outputs from the local deterministic baseline path.
-- RFC 0005 now also has an executable local Gate 2 preparation slice for the
-  baseline path only: `KimiLinearModel::try_from_artifact_dir` and
-  `KimiArtifactUnderstanding::try_init_baseline_model_from_dir` can load local
-  sharded `safetensors` payloads into the baseline model, but only for tensors
-  the repo can already map and validate today: embeddings, supported decoder
-  norms, supported attention projections, supported dense and selected
-  sparse-MoE tensors, final norm, and LM head. The executable harness in
-  `tests/kimi_rfc_0005_gate2_local_payload_tests.rs` uses a tiny local sharded
-  artifact with real payload bytes and checks deterministic output changes plus
+- RFC 0005 now also has an executable local Gate 2 preparation slice for both
+  model families on the same supported baseline tensor subset:
+  `KimiLinearModel::try_from_artifact_dir`,
+  `KimiArtifactUnderstanding::try_init_baseline_model_from_dir`,
+  `KimiAttnResModel::try_from_artifact_dir`, and
+  `KimiArtifactUnderstanding::try_init_attn_res_model_from_dir` can load local
+  sharded `safetensors` payloads into the baseline and AttnRes-Kimi models,
+  but only for tensors the repo can already map and validate today:
+  embeddings, supported decoder norms, supported attention projections,
+  supported dense and selected sparse-MoE tensors, final norm, and LM head.
+  AttnRes operator parameters remain locally initialized because public Kimi
+  artifacts do not expose them. The executable harnesses in
+  `tests/kimi_rfc_0005_gate2_local_payload_tests.rs` and
+  `tests/kimi_rfc_0005_gate2_attn_res_payload_tests.rs` use tiny local sharded
+  artifacts with real payload bytes and check deterministic output changes plus
   explicit failures for unsupported tensors, missing shards, unsupported
-  dtypes, shape mismatches, and incomplete selected-layer payload coverage.
+  dtypes, shape mismatches, and incomplete selected-layer payload coverage;
+  the AttnRes path also checks cached decode availability and standard vs
+  two-phase agreement after loading.
 - RFC 0005 now also has an executable baseline-only Gate 2 fixture-consumption
   slice for external-generator handoff:
   `attnres::kimi::KimiBaselineSliceRequestManifest` plus
@@ -108,9 +115,9 @@ Known limitations:
   public-checkpoint parity, or tight numerical agreement beyond that executed
   pilot.
 - Python/Hugging Face baseline parity work, public-checkpoint validation,
-  AttnRes-Kimi payload loading, optimized KDA kernels, training stability
-  validation, and any benchmark conclusions beyond the reduced local harnesses
-  are still deferred.
+  AttnRes-Kimi external parity generation, optimized KDA kernels, training
+  stability validation, and any benchmark conclusions beyond the reduced local
+  harnesses are still deferred.
 - No public-checkpoint parity claim is made for either baseline Kimi or
   AttnRes-Kimi until an external reference actually produces matching baseline
   slice fixtures.
@@ -210,8 +217,8 @@ support" claim.
 - RFC 0003: sharded checkpoint-import scaffolding. Implemented in this checkout
   as tensor locators, module coverage, unsupported tensor reporting,
   selected-layer/full shard plans, explicit `bfloat16` to local-runtime dtype
-  policy, plus baseline-only local payload loading for the currently supported
-  baseline tensor subset.
+  policy, plus local payload loading for the currently supported baseline
+  tensor subset.
 - Phase C: baseline parity. Partially implemented in this checkout only as a
   local fixture-backed Gate 1 subset for the baseline `KimiLinearModel` path:
   deterministic tiny-random Kimi-style config/index validation plus fixed-prompt
@@ -219,19 +226,22 @@ support" claim.
   reference bundle. Python/Hugging Face execution and public-checkpoint parity
   remain deferred.
 - Phase D: AttnRes-Kimi integration. Implemented in this checkout as execution
-  scaffolding only: separate AttnRes-Kimi model/layer/state types, explicit
-  cache-vs-block-state handling, sublayer-space block boundaries, and
-  reduced-config two-phase equivalence coverage. Baseline parity, public
-  checkpoint compatibility, and optimized kernels remain deferred.
+  scaffolding plus local artifact bootstrap for the supported baseline tensor
+  subset: separate AttnRes-Kimi model/layer/state types, explicit
+  cache-vs-block-state handling, sublayer-space block boundaries, local shard
+  loading for baseline-compatible tensors, and reduced-config two-phase
+  equivalence coverage. Baseline parity, public checkpoint compatibility, and
+  optimized kernels remain deferred.
 - Phase E: validation and benchmark scaffolding. Partially implemented in this
   checkout for local deterministic fixtures and reduced configs only: baseline
   Gate 1 fixture-backed parity, local Gate 2 payload-loading prep for the
-  supported baseline subset, baseline-only Gate 2 external-generator request
-  manifests plus external fixture consumption for locally loadable sharded
-  slices, Gate 4 functional tests, reduced Gate 5 numerical agreement checks,
-  and reduced local benchmark groups. Public checkpoint fixture
-  generation/parity, Python/Hugging Face reference work, training validation,
-  and reportable benchmark claims remain deferred.
+  supported baseline subset into both baseline and AttnRes-Kimi models,
+  baseline-only Gate 2 external-generator request manifests plus external
+  fixture consumption for locally loadable sharded slices, Gate 4 functional
+  tests, reduced Gate 5 numerical agreement checks, and reduced local
+  benchmark groups. Public checkpoint fixture generation/parity,
+  Python/Hugging Face reference work, training validation, and reportable
+  benchmark claims remain deferred.
 
 See [docs/rfcs/0001-real-model-milestone-scope.md](docs/rfcs/0001-real-model-milestone-scope.md)
 for the accepted sequencing and scope boundaries.
