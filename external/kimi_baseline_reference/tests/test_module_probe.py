@@ -105,12 +105,20 @@ class ModuleProbeTests(unittest.TestCase):
             repo_id=PUBLIC_KIMI_REPO_ID,
             revision=None,
             prompt="Explain linear attention in one sentence.",
+            execution_path="cpu_only",
             memory_overhead_gib=8.0,
+            offload_dir=None,
+            max_cpu_memory_gib=None,
         )
 
         self.assertEqual(report["kind"], BASELINE_SMOKE_REPORT_KIND)
         self.assertEqual(report["status"], "blocked_missing_full_checkpoint")
+        self.assertEqual(report["version"], 2)
+        self.assertEqual(report["execution_path"], "cpu_only")
         self.assertGreater(report["missing_shard_count"], 0)
+        self.assertIn("artifact_fingerprints", report)
+        self.assertIn("config", report["artifact_fingerprints"])
+        self.assertIn("index", report["artifact_fingerprints"])
 
 
 if __name__ == "__main__":

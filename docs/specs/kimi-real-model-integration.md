@@ -1,7 +1,7 @@
 # Real-Model Integration Specification: Kimi Linear First
 
 Status: Draft
-Date: 2026-03-18
+Date: 2026-03-23
 Branch: `codex/kimi-real-model-rfc`
 
 ## Why This Exists
@@ -12,7 +12,7 @@ next milestone. The next serious step is to run the framework on a real model
 architecture and on real checkpoint artifacts, with enough validation that a
 negative result is trusted and a positive result is meaningful.
 
-## Current Status As Of 2026-03-18
+## Current Status As Of 2026-03-23
 
 What is now implemented in this checkout:
 
@@ -35,20 +35,22 @@ What is now implemented in this checkout:
   Hugging Face remote-code path for one KDA layer, one MLA layer, final norm,
   and LM head, including decode/cache comparisons for the selected attention
   modules;
-- an honest full-checkpoint smoke harness that reports blocked prerequisites
-  explicitly;
+- a completed full public baseline smoke on the real 48B checkpoint through an
+  approved `cpu_disk_offload` execution path, with an evidence report that
+  records timings, host facts, execution-path details, and artifact
+  fingerprints;
 - an explicit baseline-to-AttnRes bootstrap policy and load report;
 - reduced optimizer-backed AttnRes-Kimi training-stability validation on a
   hybrid KDA/MLA plus dense/MoE reduced config.
 
 What is still missing for a meaningful real-model result:
 
-- end-to-end public-checkpoint smoke success on the full 48B model in this
-  environment;
 - any AttnRes-Kimi checkpoint or trained warm-start that would make imported
   baseline tensors a meaningful quality test rather than a structural
   bootstrap;
-- post-training quality validation for AttnRes-Kimi on a real checkpoint.
+- post-training quality validation for AttnRes-Kimi on a real checkpoint;
+- an honest in-checkout train/eval execution path that continues from the
+  structural bootstrap and measures quality gates on a real checkpoint.
 
 The current status summary for this milestone lives in
 [`docs/status/kimi-real-model-status.md`](../status/kimi-real-model-status.md).
@@ -123,7 +125,7 @@ framing is:
    gates;
 4. only then talk about benchmarking.
 
-This remains true on 2026-03-18. The repo can now import the supported
+This remains true on 2026-03-23. The repo can now import the supported
 baseline tensor subset into `KimiAttnResModel`, but that is still a research
 bootstrap with locally initialized AttnRes operators, not a meaningful
 real-model AttnRes evaluation.
@@ -278,17 +280,17 @@ Exit criteria:
 ## Current Critical Gap
 
 The immediate blocker to a meaningful real-model test is no longer selected
-module correctness. That slice is now executed and validated.
+module correctness or baseline smoke. Those slices are now executed and
+validated.
 
-The immediate remaining baseline blocker is full-model smoke success on
-hardware that can honestly load the public 48B checkpoint end to end.
-
-After that, the remaining AttnRes-specific blocker is quality after training:
+The remaining blocker is AttnRes-specific quality after training:
 
 - baseline Kimi weights are not an AttnRes checkpoint;
 - zero-initialized pseudo-queries do not preserve standard residual behavior;
 - meaningful AttnRes-on-real-model claims therefore still require continued
-  pretraining or fresh training plus stability checks.
+  pretraining or fresh training plus stability checks;
+- this checkout does not yet provide a real-checkpoint train/eval runner that
+  continues from the structural bootstrap and measures those gates honestly.
 
 ## Hard Truths And Risks
 
@@ -325,6 +327,9 @@ Implication:
 
 - full local end-to-end runs need an explicit hardware plan;
 - slice loading and tiny-random parity are mandatory early gates;
+- an approved disk-offload path can close the baseline smoke gate on a
+  lower-RAM host, but that does not convert the result into a performance
+  claim;
 - benchmark work must separate "can load" from "can serve efficiently."
 
 ## Go/No-Go Gates

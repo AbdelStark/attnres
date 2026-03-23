@@ -18,12 +18,12 @@ manifests plus externally generated fixture consumption for the supported
 `KimiLinearModel` subset, a local external Python fixture-generator path for
 that handoff that now supports hidden-only prefix slices as well as full
 logits fixtures, executed public-checkpoint module-probe parity against the
-official Hugging Face remote-code path, an honest full-checkpoint smoke
-harness with blocked-state reporting, Gate 4 functional validation,
+official Hugging Face remote-code path, a completed full public baseline smoke
+report with explicit execution-path reporting, Gate 4 functional validation,
 reduced-config Gate 5 numerical agreement, Gate 6 reduced training-stability
-validation, and reduced local benchmark scaffolding. Full 48B smoke success,
-real-checkpoint AttnRes quality evaluation, and reportable benchmark claims
-still remain deferred.
+validation, and reduced local benchmark scaffolding. Real-checkpoint AttnRes
+quality evaluation, an honest real-checkpoint AttnRes train/eval runner, and
+reportable benchmark claims still remain deferred.
 
 - `status/kimi-real-model-status.md`: current milestone status, the exact gap
   to a meaningful real-model test, and the next critical blockers.

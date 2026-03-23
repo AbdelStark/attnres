@@ -40,14 +40,16 @@ require validated performance and operational guarantees.
 
 For the Kimi real-model milestone specifically, see
 [docs/status/kimi-real-model-status.md](docs/status/kimi-real-model-status.md).
-As of March 18, 2026, the repo has code-backed selected-module
+As of March 23, 2026, the repo has code-backed selected-module
 public-checkpoint baseline correctness for
 `moonshotai/Kimi-Linear-48B-A3B-Instruct`, an honest full-checkpoint smoke
-harness, an explicit baseline-to-AttnRes bootstrap policy, and reduced
+harness with a completed real-checkpoint report, an explicit
+baseline-to-AttnRes bootstrap policy, and reduced
 optimizer-backed training-stability validation. It still has not crossed the
-bar for a meaningful real-model AttnRes result because full 48B smoke remains
-blocked in this environment and no real-checkpoint AttnRes quality evaluation
-has run.
+bar for a meaningful real-model AttnRes result because the public baseline
+smoke completion does not validate AttnRes quality, and this checkout still
+lacks a real-checkpoint AttnRes train/eval path beyond structural bootstrap
+plus reduced Gate 6 stability checks.
 
 Known limitations:
 
@@ -132,15 +134,19 @@ Known limitations:
   layer, final norm, LM head, and decode/cache traces where applicable.
 - RFC 0005 now also has an honest full-checkpoint smoke harness:
   `external/kimi_baseline_reference/run_baseline_smoke.py` reports executed
-  smoke assumptions and returns a blocked status instead of a false pass when
-  the full 48B artifact set or required RAM is unavailable.
+  smoke assumptions, execution-path details, timings, hardware facts, and
+  artifact fingerprints. The current repo now includes a completed public
+  report at `docs/reports/kimi-public-baseline-smoke-2026-03-23.json`, and
+  the harness still returns a blocked status instead of a false pass when the
+  full 48B artifact set or required prerequisites are unavailable.
 - RFC 0005 now also has reduced optimizer-backed training-stability coverage in
   `tests/kimi_rfc_0005_gate6_training_stability_tests.rs` for a hybrid
   KDA/MLA plus dense/MoE reduced config, with explicit loss-growth, activation,
   gradient, and non-finite failure criteria against a baseline Kimi control.
-- Full public-checkpoint prompt-path success, real-checkpoint AttnRes quality
-  evaluation after training, optimized KDA kernels, and reportable benchmark
-  conclusions beyond the reduced/local harnesses remain deferred.
+- Real-checkpoint AttnRes quality evaluation after training, an honest
+  real-checkpoint AttnRes train/eval runner, optimized KDA kernels, and
+  reportable benchmark conclusions beyond the reduced/local harnesses remain
+  deferred.
 - No compatibility promise for a stable 1.0 public API yet.
 - No dedicated formal spec document is checked into this repository today.
 

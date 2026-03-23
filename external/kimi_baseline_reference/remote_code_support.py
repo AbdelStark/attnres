@@ -287,9 +287,12 @@ def load_remote_kimi_modules(remote_code_dir: Path) -> tuple[type, Any, str]:
         raise RemoteCodeError(f"missing remote code directory '{remote_code_dir}'")
 
     backend = install_fla_backend()
+    import importlib
     import transformers.utils as transformers_utils
-    import transformers.utils.auto_docstring as auto_docstring_module
+    auto_docstring_module = importlib.import_module("transformers.utils.auto_docstring")
 
+    original_auto_docstring_module = auto_docstring_module.auto_docstring
+    original_transformers_auto_docstring = transformers_utils.auto_docstring
     no_op_auto_docstring = lambda *args, **kwargs: (lambda obj: obj)
     auto_docstring_module.auto_docstring = no_op_auto_docstring  # type: ignore[assignment]
     transformers_utils.auto_docstring = no_op_auto_docstring  # type: ignore[assignment]
@@ -298,17 +301,21 @@ def load_remote_kimi_modules(remote_code_dir: Path) -> tuple[type, Any, str]:
     package.__path__ = [str(remote_code_dir)]
     sys.modules[package_name] = package
 
-    modules = {}
-    for module_name in ("configuration_kimi", "modeling_kimi"):
-        module_path = remote_code_dir / f"{module_name}.py"
-        if not module_path.exists():
-            raise RemoteCodeError(f"missing remote code file '{module_path}'")
-        spec = importlib.util.spec_from_file_location(f"{package_name}.{module_name}", module_path)
-        if spec is None or spec.loader is None:
-            raise RemoteCodeError(f"failed to create import spec for '{module_path}'")
-        module = importlib.util.module_from_spec(spec)
-        sys.modules[spec.name] = module
-        spec.loader.exec_module(module)
-        modules[module_name] = module
+    try:
+        modules = {}
+        for module_name in ("configuration_kimi", "modeling_kimi"):
+            module_path = remote_code_dir / f"{module_name}.py"
+            if not module_path.exists():
+                raise RemoteCodeError(f"missing remote code file '{module_path}'")
+            spec = importlib.util.spec_from_file_location(f"{package_name}.{module_name}", module_path)
+            if spec is None or spec.loader is None:
+                raise RemoteCodeError(f"failed to create import spec for '{module_path}'")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = module
+            spec.loader.exec_module(module)
+            modules[module_name] = module
+    finally:
+        auto_docstring_module.auto_docstring = original_auto_docstring_module  # type: ignore[assignment]
+        transformers_utils.auto_docstring = original_transformers_auto_docstring  # type: ignore[assignment]
 
     return modules["configuration_kimi"].KimiLinearConfig, modules["modeling_kimi"], backend

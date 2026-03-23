@@ -40,6 +40,10 @@ The repository did not maintain a structured changelog before March 16, 2026.
   tensors on the Python side without Rust tensor payload export, validates
   generated fixtures through the existing consumer path, and exercises
   explicit negative-path coverage on the Python side.
+- Public-checkpoint baseline smoke completion on the real
+  `moonshotai/Kimi-Linear-48B-A3B-Instruct` checkpoint via the RFC 0005 Python
+  harness, with an archived evidence report at
+  `docs/reports/kimi-public-baseline-smoke-2026-03-23.json`.
 
 ### Changed
 
@@ -62,8 +66,17 @@ The repository did not maintain a structured changelog before March 16, 2026.
   local Python bridge with explicit fixed-scope prompts, selected hidden
   layers, and coarse recorded tolerances, while keeping public-checkpoint and
   Hugging Face remote-code claims deferred.
+- The public baseline smoke harness now supports an approved lower-RAM
+  `cpu_disk_offload` execution path and records host facts, timings,
+  execution-path details, attention-backend overrides, device placement, and
+  SHA-256 artifact fingerprints in its report.
+- Kimi milestone docs now state that full public baseline smoke is completed,
+  while keeping real-checkpoint AttnRes quality and benchmark claims blocked.
 
 ### Fixed
 
 - Explicit validation for `num_heads = 0`.
 - Explicit validation for out-of-range `layer_idx` values.
+- The public remote-code loader now restores the temporary
+  `auto_docstring` monkeypatch after import instead of leaking it across later
+  imports.

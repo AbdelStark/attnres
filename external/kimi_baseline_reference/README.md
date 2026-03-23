@@ -27,8 +27,9 @@ This directory now contains two executable external RFC 0005 reference paths:
 - writes a schema-compatible `baseline-slice-parity.json`
 - leaves the Rust manifest/fixture consumer path unchanged
 - can also load official Hugging Face remote code for public Kimi module probes
-- can emit an honest full-checkpoint smoke report that records missing-shard or
-  RAM blockers explicitly
+- can emit an honest full-checkpoint smoke report that records execution-path
+  details, timings, host facts, and artifact fingerprints, and still records
+  missing-shard or RAM blockers explicitly when prerequisites are not met
 
 No Rust tensor payload bridge is used anymore for this path.
 
@@ -187,10 +188,25 @@ Additional executable surfaces in this directory:
   - loads them with a CPU fallback for `fla-core` pieces when the current
     machine cannot import the official backend directly
 - `run_baseline_smoke.py`
-  - reports whether the full public checkpoint can be attempted on the current
-    host
+  - supports `cpu_only` and `cpu_disk_offload` execution paths
+  - records host facts, explicit dtype handling, attention backend overrides,
+    device placement, and SHA-256 fingerprints for the config, shard index,
+    remote-code files, and all present shards
   - emits `blocked_missing_full_checkpoint` instead of pretending a smoke run
-    passed when shards or RAM are missing
+    passed when shards or prerequisites are missing
+  - also supports an approved lower-RAM completion path via
+    `--execution-path cpu_disk_offload --offload-dir ... --max-cpu-memory-gib ...`
+
+Executed public smoke in this checkout:
+
+- repo:
+  `moonshotai/Kimi-Linear-48B-A3B-Instruct`
+- revision:
+  `e1df551a447157d4658b573f9a695d57658590e9`
+- command:
+  `.venv-kimi-public/bin/python -m external.kimi_baseline_reference.run_baseline_smoke --artifact-dir /Users/abdel/.cache/attnres/kimi-linear-48b-e1df551a447157d4658b573f9a695d57658590e9 --output-path /Users/abdel/dev/me/machine-learning/attnres/docs/reports/kimi-public-baseline-smoke-2026-03-23.json --repo-id moonshotai/Kimi-Linear-48B-A3B-Instruct --revision e1df551a447157d4658b573f9a695d57658590e9 --execution-path cpu_disk_offload --offload-dir /Users/abdel/.cache/attnres/kimi-linear-48b-e1df551a447157d4658b573f9a695d57658590e9/baseline-smoke-offload --max-cpu-memory-gib 40`
+- result:
+  `docs/reports/kimi-public-baseline-smoke-2026-03-23.json`
 
 ## Deferred Work
 
@@ -198,8 +214,8 @@ Remaining Gate 2 / Gate 3 dependencies are still deferred:
 
 - support additional local-init strategies beyond
   `burn.ndarray.lazy_linear_kaiming_uniform.v1`
-- execute full-model public-checkpoint prompt-path smoke on a host with the
-  complete shard set and enough RAM
 - execute any real-checkpoint AttnRes quality evaluation after training
+- add an honest real-checkpoint AttnRes train/eval path beyond structural
+  bootstrap plus reduced Gate 6 local stability
 - keep any future public-checkpoint claim blocked until the unchanged attnres
   consumer accepts the externally generated fixture for that checkpoint path

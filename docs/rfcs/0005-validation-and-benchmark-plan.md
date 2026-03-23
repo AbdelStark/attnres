@@ -64,8 +64,9 @@ The repository now executes a narrow local subset of this RFC:
   current macOS CPU environment.
 - Gate 3 now has an executable public-checkpoint smoke harness in
   `external/kimi_baseline_reference/run_baseline_smoke.py`. The executed
-  report path records assumptions, hardware, and missing-artifact blockers
-  explicitly instead of turning them into soft passes.
+  report path records assumptions, hardware, execution-path details, timings,
+  and artifact fingerprints explicitly instead of turning blockers into soft
+  passes.
 - Gate 4 is executable in-repo through AttnRes-Kimi tests for dual AttnRes
   placement, mixed MLA/KDA block-state progression, embedding-block retention,
   and loud invariant-panics on corrupted internal state.
@@ -86,9 +87,10 @@ The following remain deferred and should not be implied by these executed
 results:
 
 - Python/Hugging Face execution against `tiny-random/kimi-linear` for Gate 1.
-- full-model public-checkpoint prompt-path success for Gate 3.
 - real-checkpoint AttnRes quality evaluation after training or continued
   pretraining.
+- an honest real-checkpoint train/eval runner in this checkout that continues
+  from the structural bootstrap and measures those quality gates.
 - Any benchmark claim beyond the reduced local harnesses above.
 
 ## Principles
@@ -224,15 +226,30 @@ Pass condition:
 
 - consistent prompt completion behavior on a fixed smoke suite
 
-Executed status on 2026-03-18:
+Executed status on 2026-03-23:
 
 - harness executed against
   `moonshotai/Kimi-Linear-48B-A3B-Instruct`
   revision `e1df551a447157d4658b573f9a695d57658590e9`
-- result: `blocked_missing_full_checkpoint`
-- executed blocker details:
-  17 of 20 shards missing locally and host RAM `51,539,607,552` bytes below
-  the configured CPU minimum `106,835,463,168` bytes
+- result: `passed`
+- execution path: `cpu_disk_offload`
+- host RAM: `51,539,607,552` bytes
+- configured CPU-only minimum RAM: `106,835,463,168` bytes
+- checkpoint size: `98,245,528,576` bytes
+- local shard state: `20 / 20` present, `0` missing
+- load dtype: `float32`
+- dtype action:
+  `upcast_bfloat16_to_float32_for_cpu_offload`
+- `fla-core` backend: `cpu_fallback`
+- full report:
+  `docs/reports/kimi-public-baseline-smoke-2026-03-23.json`
+
+Interpretation:
+
+- Gate 3 baseline smoke is now closed through an approved equivalent execution
+  path on a lower-RAM host.
+- This result does not imply kernel parity, throughput parity, or any
+  real-checkpoint AttnRes quality claim.
 
 ### Gate 4: AttnRes-Kimi functional validation
 
