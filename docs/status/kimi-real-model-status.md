@@ -21,6 +21,15 @@ can honestly support:
   and all 20 checkpoint shards;
 - baseline-to-AttnRes bootstrap is explicit and reported as structural
   bootstrap only;
+- an honest real-checkpoint AttnRes train/eval harness now exists in this
+  checkout, with explicit config, seed, optimizer, failure-gate, hardware,
+  timing, and artifact-fingerprint reporting;
+- the first executed 48B AttnRes real-checkpoint run is now recorded as a
+  blocked preflight in
+  `docs/reports/kimi-attnres-real-train-eval-blocked-2026-03-23.json`,
+  because the float-runtime-weight lower bound
+  (`196,491,057,152` bytes) exceeds host RAM (`51,539,607,552` bytes) and the
+  requested train/validation token slices do not exist;
 - reduced Kimi-style AttnRes training-stability validation still passes with a
   real Burn optimizer loop and explicit failure criteria.
 
@@ -142,6 +151,46 @@ The load report states plainly that:
 - the result is structural bootstrap only and does not justify parity, quality,
   or benchmark claims before additional training succeeds.
 
+### Real-Checkpoint AttnRes Train/Eval Harness
+
+Executed command:
+
+- `cargo run --example kimi_real_model_tools -- run-attn-res-real-train-eval /Users/abdel/dev/me/machine-learning/attnres/docs/reports/kimi-attnres-real-train-eval-config-2026-03-23.json`
+
+Observed result:
+
+- status: `BlockedPreflight`
+- config:
+  - seed: `20260323`
+  - bootstrap policy:
+    `KimiAttnResBootstrapPolicy::BaselineImportWithFreshAttnRes`
+  - trainable scope: `AttnResOnly`
+  - `num_blocks = 54`
+  - `batch_size = 1`
+  - `max_train_steps = 1`
+  - `max_eval_batches = 1`
+  - optimizer:
+    `lr = 5e-5`, `beta1 = 0.9`, `beta2 = 0.95`, `eps = 1e-8`
+- report:
+  `docs/reports/kimi-attnres-real-train-eval-blocked-2026-03-23.json`
+- exact preflight blockers:
+  - host RAM `51,539,607,552` bytes is below the float-runtime-weight lower
+    bound `196,491,057,152` bytes for the real 20-shard checkpoint on this
+    runtime path
+  - train token slice missing:
+    `/Users/abdel/dev/me/machine-learning/attnres/data/kimi-public/attnres-train-slice.json`
+  - validation token slice missing:
+    `/Users/abdel/dev/me/machine-learning/attnres/data/kimi-public/attnres-validation-slice.json`
+- shard state at preflight:
+  - required full-checkpoint shards present: `20 / 20`
+  - full import plan loadable: `true`
+  - artifact fingerprints reused from:
+    `docs/reports/kimi-public-baseline-smoke-2026-03-23.json`
+- no bootstrap load, training step, validation batch, or checkpoint write was
+  attempted after those blockers were recorded
+
+This is now an executed blocked report, not the absence of a runner.
+
 ### Reduced Training-Stability Validation
 
 Executed repo target:
@@ -160,11 +209,13 @@ Observed result:
   - non-finite hidden states or logits
   - non-finite gradients
   - excessive loss growth
-  - excessive whole-model gradient L2 norm
-  - excessive hidden/logit RMS growth
+- excessive whole-model gradient L2 norm
+- excessive hidden/logit RMS growth
 
-This remains reduced-config stability evidence only. There is still no
-executed real-checkpoint AttnRes train/eval result in this checkout.
+This remains reduced-config stability evidence only. The checkout now also has
+an executed real-checkpoint AttnRes harness report, but that 48B path is still
+blocked before bootstrap by missing data inputs and insufficient host RAM on
+this machine.
 
 ## Phase Status
 
@@ -207,19 +258,22 @@ Still missing:
 
 ### Phase D: AttnRes-Kimi Integration
 
-Status: implemented as a structural bootstrap and reduced-config execution path
+Status: implemented as a structural bootstrap, reduced-config execution path,
+and honest real-checkpoint harness
 
 - separate `KimiAttnResModel`, `KimiAttnResDecoderLayer`, and block-state path
 - dual AttnRes placement per decoder layer
 - sublayer-space block boundaries
 - explicit baseline-to-AttnRes bootstrap policy and report
 - reduced-config standard-vs-two-phase agreement
+- executable real-checkpoint AttnRes train/eval harness with explicit blocked
+  preflight reporting on the real 20-shard artifact
 
 Still missing:
 
 - any trained real-checkpoint AttnRes result
-- any real-checkpoint train/eval harness that continues from the structural
-  bootstrap and measures quality gates honestly
+- sufficient data and compute to clear preflight and actually continue
+  training/evaluate from the structural bootstrap on the 48B checkpoint
 
 ### Phase E: Validation And Benchmark Work
 
@@ -234,6 +288,8 @@ Status: materially advanced, but not benchmark-complete
 - Gate 4 functional tests
 - Gate 5 reduced numerical agreement
 - Gate 6 reduced optimizer-backed training stability
+- executed blocked real-checkpoint AttnRes train/eval preflight report with
+  hardware, dtype, timing, and artifact-fingerprint reporting
 
 Still missing:
 
@@ -252,19 +308,21 @@ Still missing:
    `cpu_fallback`. That is acceptable for correctness validation here, but it
    is not evidence for kernel parity or throughput.
 3. The AttnRes real-model story remains a structural bootstrap plus reduced
-   stability result, not a quality result. This checkout contains bootstrap
-   reporting and reduced Gate 6 training stability, but not an honest
-   real-checkpoint train/eval runner that continues from the imported baseline
-   bootstrap and measures quality gates on the 48B path.
+   stability result, not a quality result. This checkout now contains an
+   honest real-checkpoint train/eval runner and an executed blocked report, but
+   the 48B path still cannot clear preflight on this machine because the
+   float-runtime-weight lower bound exceeds host RAM and the requested
+   train/validation token slices are not present.
 
 ## Project-Lead Status
 
 As of 2026-03-23, the repo has closed the public baseline milestone through
 selected-module parity plus a completed full public baseline smoke on the real
-checkpoint, with an evidence report that preserves exact commands, outputs,
-timings, hardware facts, and artifact fingerprints.
+checkpoint, and it now also includes the first honest real-checkpoint AttnRes
+train/eval harness for the structural bootstrap path.
 
-The strongest honest blocker that remains is no longer baseline smoke. It is
-real-checkpoint AttnRes validation after bootstrap: continued training,
-explicit evaluation gates, and benchmark-quality reporting still require an
-execution path that this checkout does not yet implement.
+The strongest honest blocker that remains is no longer the absence of a real
+runner. It is clearing that runner's preflight honestly: this host lacks the
+RAM headroom for the full float-runtime checkpoint load, and this checkout
+still lacks the explicit real token-slice train/validation inputs needed to
+take and evaluate the first AttnRes continuation step.

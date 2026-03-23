@@ -40,6 +40,13 @@ What is now implemented in this checkout:
   records timings, host facts, execution-path details, and artifact
   fingerprints;
 - an explicit baseline-to-AttnRes bootstrap policy and load report;
+- an executable real-checkpoint AttnRes train/eval harness for
+  `BaselineImportWithFreshAttnRes`, with explicit config/schema validation,
+  train/eval failure gates, hardware reporting, artifact/config fingerprints,
+  timing reporting, and checkpoint/report output paths;
+- an executed blocked real-checkpoint report on the real 20-shard public
+  checkpoint that preserves the exact command, config fingerprint, blocker
+  details, and artifact facts instead of pretending the path succeeded;
 - reduced optimizer-backed AttnRes-Kimi training-stability validation on a
   hybrid KDA/MLA plus dense/MoE reduced config.
 
@@ -49,8 +56,10 @@ What is still missing for a meaningful real-model result:
   baseline tensors a meaningful quality test rather than a structural
   bootstrap;
 - post-training quality validation for AttnRes-Kimi on a real checkpoint;
-- an honest in-checkout train/eval execution path that continues from the
-  structural bootstrap and measures quality gates on a real checkpoint.
+- committed real token-slice train/validation inputs for the 48B continuation
+  path; and
+- enough host memory/compute to clear preflight and actually execute the first
+  real-checkpoint AttnRes continuation step plus evaluation on this machine.
 
 The current status summary for this milestone lives in
 [`docs/status/kimi-real-model-status.md`](../status/kimi-real-model-status.md).
@@ -126,9 +135,11 @@ framing is:
 4. only then talk about benchmarking.
 
 This remains true on 2026-03-23. The repo can now import the supported
-baseline tensor subset into `KimiAttnResModel`, but that is still a research
-bootstrap with locally initialized AttnRes operators, not a meaningful
-real-model AttnRes evaluation.
+baseline tensor subset into `KimiAttnResModel`, and it now has an honest
+real-checkpoint train/eval harness for that bootstrap path, but the first
+executed 48B run is still blocked preflight on this host. The imported model
+remains a research bootstrap with locally initialized AttnRes operators, not a
+meaningful real-model AttnRes quality result.
 
 ### 3. Kimi K2 is out of initial scope
 
@@ -289,8 +300,13 @@ The remaining blocker is AttnRes-specific quality after training:
 - zero-initialized pseudo-queries do not preserve standard residual behavior;
 - meaningful AttnRes-on-real-model claims therefore still require continued
   pretraining or fresh training plus stability checks;
-- this checkout does not yet provide a real-checkpoint train/eval runner that
-  continues from the structural bootstrap and measures those gates honestly.
+- this checkout now provides that runner, but the first real 48B execution is
+  blocked by two explicit preflight constraints:
+  - the float-runtime-weight lower bound
+    (`196,491,057,152` bytes) exceeds host RAM (`51,539,607,552` bytes) on
+    this machine;
+  - the requested train and validation token-slice files are not yet present
+    in this checkout.
 
 ## Hard Truths And Risks
 

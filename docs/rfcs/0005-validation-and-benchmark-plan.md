@@ -79,6 +79,14 @@ The repository now executes a narrow local subset of this RFC:
   AttnRes-Kimi against a baseline Kimi control on deterministic batches and
   seeds, and fails on explicit loss-growth, gradient-norm, activation-norm, or
   non-finite regressions.
+- Gate 6 now also has a narrow honest real-checkpoint continuation harness in
+  `src/kimi/real_train_eval.rs` plus the
+  `run-attn-res-real-train-eval` entrypoint in
+  `examples/kimi_real_model_tools.rs`; the first executed 48B run is recorded
+  in `docs/reports/kimi-attnres-real-train-eval-blocked-2026-03-23.json` and
+  preserves the exact config, command, hardware facts, dtype/runtime facts,
+  timings, fingerprints, and preflight blockers instead of turning them into a
+  soft pass.
 - Gate 7 now has reduced local benchmark scaffolding for baseline Kimi
   forward/cached-forward and AttnRes-Kimi forward/two-phase runs, with
   benchmark ids that encode backend/model/sequence metadata.
@@ -89,8 +97,9 @@ results:
 - Python/Hugging Face execution against `tiny-random/kimi-linear` for Gate 1.
 - real-checkpoint AttnRes quality evaluation after training or continued
   pretraining.
-- an honest real-checkpoint train/eval runner in this checkout that continues
-  from the structural bootstrap and measures those quality gates.
+- the real token-slice train/validation inputs and higher-memory compute
+  needed to clear the new real-checkpoint AttnRes harness preflight on this
+  machine.
 - Any benchmark claim beyond the reduced local harnesses above.
 
 ## Principles
@@ -300,6 +309,41 @@ Executed status on 2026-03-18:
   whole-model gradient L2 caps
 - AttnRes-Kimi is checked against a baseline Kimi control instead of being
   evaluated in isolation
+
+Executed real-checkpoint continuation status on 2026-03-23:
+
+- command:
+  `cargo run --example kimi_real_model_tools -- run-attn-res-real-train-eval /Users/abdel/dev/me/machine-learning/attnres/docs/reports/kimi-attnres-real-train-eval-config-2026-03-23.json`
+- config/report artifacts:
+  - config:
+    `docs/reports/kimi-attnres-real-train-eval-config-2026-03-23.json`
+  - report:
+    `docs/reports/kimi-attnres-real-train-eval-blocked-2026-03-23.json`
+- requested path:
+  - bootstrap policy:
+    `BaselineImportWithFreshAttnRes`
+  - trainable scope: `AttnResOnly`
+  - `num_blocks = 54`
+  - `batch_size = 1`
+  - `max_train_steps = 1`
+  - `max_eval_batches = 1`
+  - seed: `20260323`
+- observed result:
+  - status: `BlockedPreflight`
+  - required full-checkpoint shards present: `20 / 20`
+  - full import plan loadable: `true`
+  - runtime dtype: `float32`
+  - artifact dtype: `bfloat16`
+  - runtime-weight lower bound: `196,491,057,152` bytes
+  - host RAM: `51,539,607,552` bytes
+  - missing train slice:
+    `/Users/abdel/dev/me/machine-learning/attnres/data/kimi-public/attnres-train-slice.json`
+  - missing validation slice:
+    `/Users/abdel/dev/me/machine-learning/attnres/data/kimi-public/attnres-validation-slice.json`
+- interpretation:
+  - the repo now has an honest real-checkpoint continuation runner
+  - this host still cannot execute the first AttnRes continuation step
+    honestly until both data inputs and larger-memory compute are available
 
 ### Gate 7: Benchmark reporting
 
