@@ -21,8 +21,10 @@
 //!   official Hugging Face remote-code path for one KDA layer, one MLA layer,
 //!   final norm, and LM head, an honest full-checkpoint smoke harness with
 //!   blocked-state reporting, Gate 4 functional tests, reduced-config Gate 5
-//!   hidden/logit agreement, Gate 6 reduced training-stability validation, and
-//!   reduced local benchmark groups for baseline Kimi plus AttnRes-Kimi.
+//!   hidden/logit agreement, Gate 6 reduced training-stability validation,
+//!   a full-checkpoint AttnRes train/eval harness with explicit blocked-state
+//!   reporting and AttnRes-only finetune scope, and reduced local benchmark
+//!   groups for baseline Kimi plus AttnRes-Kimi.
 //!
 //! Full 48B end-to-end smoke success on real hardware, real-checkpoint
 //! AttnRes quality evaluation, optimized kernels, and reportable benchmark
@@ -44,6 +46,7 @@ pub mod module_probe;
 pub mod moe;
 pub mod payload;
 pub mod phase;
+pub mod real_train_eval;
 pub mod schedule;
 pub mod slice_parity;
 
@@ -88,6 +91,19 @@ pub use module_probe::{
 pub use moe::KimiSparseMoe;
 pub use payload::KimiBaselinePayloadError;
 pub use phase::{KimiMilestonePhase, KIMI_ARTIFACT_UNDERSTANDING_PHASE, KIMI_IMPLEMENTED_PHASE};
+pub use real_train_eval::{
+    run_kimi_attn_res_real_train_eval_from_config_path, KimiAttnResAdamOptimizerConfig,
+    KimiAttnResArtifactSummary, KimiAttnResEvalSummary, KimiAttnResParameterSummary,
+    KimiAttnResPreflightBlocker, KimiAttnResPreflightBlockerKind, KimiAttnResRealTrainEvalConfig,
+    KimiAttnResRealTrainEvalError, KimiAttnResRealTrainEvalOutputs, KimiAttnResRealTrainEvalReport,
+    KimiAttnResRealTrainEvalStatus, KimiAttnResRealTrainEvalTimings,
+    KimiAttnResTrainEvalFailureCriteria, KimiAttnResTrainStepObservation, KimiAttnResTrainSummary,
+    KimiAttnResTrainableScope, KimiFileFingerprint, KimiHostFacts, KimiPreparedTokenSliceSummary,
+    KimiTokenSliceFile, KIMI_ATTN_RES_REAL_TRAIN_EVAL_CONFIG_KIND,
+    KIMI_ATTN_RES_REAL_TRAIN_EVAL_CONFIG_VERSION, KIMI_ATTN_RES_REAL_TRAIN_EVAL_REPORT_KIND,
+    KIMI_ATTN_RES_REAL_TRAIN_EVAL_REPORT_VERSION, KIMI_BASELINE_SMOKE_REPORT_KIND,
+    KIMI_TOKEN_SLICE_KIND, KIMI_TOKEN_SLICE_VERSION,
+};
 pub use schedule::{
     KimiAttentionLayerKind, KimiFeedForwardLayerKind, KimiLayerSchedule, KimiLayerScheduleError,
     KimiScheduledLayer,

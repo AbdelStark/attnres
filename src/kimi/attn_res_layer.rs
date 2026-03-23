@@ -159,6 +159,21 @@ impl KimiAttnResConfig {
 }
 
 impl<B: Backend> KimiAttnResDecoderLayer<B> {
+    pub fn freeze_baseline_parameters(self) -> Self {
+        Self {
+            layer_idx: self.layer_idx,
+            block_size: self.block_size,
+            attention_kind: self.attention_kind,
+            feed_forward_kind: self.feed_forward_kind,
+            attn_res: self.attn_res,
+            input_norm: self.input_norm.no_grad(),
+            attention: self.attention.no_grad(),
+            mlp_res: self.mlp_res,
+            post_attention_norm: self.post_attention_norm.no_grad(),
+            feed_forward: self.feed_forward.no_grad(),
+        }
+    }
+
     pub(crate) fn try_apply_tensor_payload(
         &mut self,
         tensor_name: &str,

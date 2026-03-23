@@ -2,15 +2,17 @@ use attnres::kimi::{
     build_default_module_probe_request,
     compare_baseline_slice_parity_fixture_with_manifest_from_dir,
     compare_module_probe_fixture_from_dir, generate_module_probe_fixture_from_dir,
-    KimiArtifactUnderstanding, KimiBaselineSliceRequestSpec, KimiModuleProbeFixture,
+    run_kimi_attn_res_real_train_eval_from_config_path, KimiArtifactUnderstanding,
+    KimiAttnResRealTrainEvalReport, KimiBaselineSliceRequestSpec, KimiModuleProbeFixture,
     KimiModuleProbeRequest, KIMI_BASELINE_SLICE_REQUEST_FILENAME,
 };
-use burn::backend::NdArray;
+use burn::backend::{Autodiff, NdArray};
 use std::error::Error;
 use std::fs;
 use std::path::Path;
 
 type BackendImpl = NdArray;
+type TrainBackendImpl = Autodiff<NdArray>;
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = std::env::args().collect::<Vec<_>>();
@@ -54,9 +56,12 @@ fn main() -> Result<(), Box<dyn Error>> {
                 Path::new(fixture_path),
             )?;
         }
+        [_, command, config_path] if command == "run-attn-res-real-train-eval" => {
+            run_attn_res_real_train_eval(Path::new(config_path), args.clone())?;
+        }
         _ => {
             eprintln!(
-                "usage:\n  cargo run --example kimi_real_model_tools -- emit-module-probe-request <artifact-dir> <output-path>\n  cargo run --example kimi_real_model_tools -- generate-module-probe-fixture-rust <artifact-dir> <request-path> <output-path>\n  cargo run --example kimi_real_model_tools -- validate-module-probe-fixture <artifact-dir> <request-path> <fixture-path>\n  cargo run --example kimi_real_model_tools -- emit-baseline-slice-request-bundle-from-spec <artifact-dir> <request-spec-path> <output-dir>\n  cargo run --example kimi_real_model_tools -- validate-baseline-slice-fixture <artifact-dir> <manifest-path> <fixture-path>"
+                "usage:\n  cargo run --example kimi_real_model_tools -- emit-module-probe-request <artifact-dir> <output-path>\n  cargo run --example kimi_real_model_tools -- generate-module-probe-fixture-rust <artifact-dir> <request-path> <output-path>\n  cargo run --example kimi_real_model_tools -- validate-module-probe-fixture <artifact-dir> <request-path> <fixture-path>\n  cargo run --example kimi_real_model_tools -- emit-baseline-slice-request-bundle-from-spec <artifact-dir> <request-spec-path> <output-dir>\n  cargo run --example kimi_real_model_tools -- validate-baseline-slice-fixture <artifact-dir> <manifest-path> <fixture-path>\n  cargo run --example kimi_real_model_tools -- run-attn-res-real-train-eval <config-path>"
             );
             std::process::exit(1);
         }
@@ -103,6 +108,37 @@ fn validate_module_probe_fixture(
         &device,
     )?;
     Ok(())
+}
+
+fn run_attn_res_real_train_eval(
+    config_path: &Path,
+    command: Vec<String>,
+) -> Result<(), Box<dyn Error>> {
+    let device = Default::default();
+    let report = run_kimi_attn_res_real_train_eval_from_config_path::<TrainBackendImpl, _>(
+        config_path,
+        command,
+        &device,
+    )?;
+    report.write(&report.outputs.report_path)?;
+    print_train_eval_summary(&report);
+    Ok(())
+}
+
+fn print_train_eval_summary(report: &KimiAttnResRealTrainEvalReport) {
+    println!(
+        "wrote AttnRes real train/eval report to {} (status: {:?})",
+        report.outputs.report_path, report.status
+    );
+    if !report.preflight_blockers.is_empty() {
+        println!("preflight blockers:");
+        for blocker in &report.preflight_blockers {
+            println!("  - {:?}: {}", blocker.kind, blocker.detail);
+        }
+    }
+    if let Some(reason) = &report.failure_reason {
+        println!("failure_reason: {reason}");
+    }
 }
 
 fn emit_baseline_slice_request_bundle_from_spec(

@@ -131,6 +131,21 @@ impl<B: Backend> KimiAttnResModel<B> {
         Ok(())
     }
 
+    pub fn freeze_baseline_parameters(self) -> Self {
+        Self {
+            embedding: self.embedding.no_grad(),
+            layers: self
+                .layers
+                .into_iter()
+                .map(KimiAttnResDecoderLayer::freeze_baseline_parameters)
+                .collect(),
+            final_norm: self.final_norm.no_grad(),
+            lm_head: self.lm_head.no_grad(),
+            layer_schedule: self.layer_schedule,
+            use_cache: self.use_cache,
+        }
+    }
+
     pub fn layers(&self) -> &[KimiAttnResDecoderLayer<B>] {
         &self.layers
     }
